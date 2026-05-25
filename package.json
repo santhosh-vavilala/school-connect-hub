@@ -3,6 +3,7 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "homepage": "https://santhosh-vavilala.github.io/school-connect-hub",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
