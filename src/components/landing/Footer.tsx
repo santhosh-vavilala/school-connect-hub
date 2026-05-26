@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { GraduationCap, Facebook, Twitter, Instagram, Linkedin } from "lucide-react";
 
 export function Footer() {
@@ -39,8 +40,16 @@ export function Footer() {
           <div>
             <h4 className="font-semibold mb-4">Legal</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-foreground">Terms & Conditions</a></li>
+              <li>
+                <Link to="/privacy-policy" className="hover:text-foreground">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms-and-conditions" className="hover:text-foreground">
+                  Terms & Conditions
+                </Link>
+              </li>
               <li><a href="#" className="hover:text-foreground">Cookie Policy</a></li>
             </ul>
           </div>
