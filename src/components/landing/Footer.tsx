@@ -11,7 +11,7 @@ export function Footer() {
                 <GraduationCap className="h-5 w-5 text-white" />
               </div>
               <span className="text-lg font-bold">
-                School<span className="gradient-text">Connect</span>
+                School <span className="gradient-text">Connect</span>
               </span>
             </div>
             <p className="mt-4 text-sm text-muted-foreground max-w-sm">

@@ -53,11 +53,19 @@ export function Hero() {
             className="relative flex justify-center"
           >
             <div className="absolute inset-0 -z-10 [background:var(--gradient-primary)] opacity-20 blur-3xl rounded-full" />
-            <img
+            <motion.img
               src={mockup}
               alt="School Connect mobile app preview"
               width={1024}
               height={1024}
+              animate={{
+                y: [0, -8, 0],
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
               className="w-full max-w-md"
             />
           </motion.div>
