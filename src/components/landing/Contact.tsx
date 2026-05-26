@@ -8,12 +8,34 @@ import { toast } from "sonner";
 export function Contact() {
   const [sending, setSending] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSending(true);
+
+    const formData = new FormData(e.currentTarget);
+    const name = String(formData.get("name") || "").trim();
+    const email = String(formData.get("email") || "").trim();
+    const school = String(formData.get("school") || "").trim();
+    const message = String(formData.get("message") || "").trim();
+
+    const subject = encodeURIComponent(`New message from ${name || "School Connect website"}`);
+    const body = encodeURIComponent(
+      [
+        `Name: ${name}`,
+        `Email: ${email}`,
+        school ? `School: ${school}` : undefined,
+        "",
+        `Message:\n${message}`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+
+    window.location.href = `mailto:hello@school-connect.app?subject=${subject}&body=${body}`;
+
     setTimeout(() => {
-      toast.success("Thanks! We'll get back to you soon.");
-      (e.target as HTMLFormElement).reset();
+      toast.success("Your email app should now be opening to send the message.");
+      e.currentTarget.reset();
       setSending(false);
     }, 800);
   };
@@ -64,7 +86,7 @@ export function Contact() {
             <Input placeholder="School name" name="school" className="h-12 rounded-xl" />
             <Textarea required placeholder="How can we help?" name="message" rows={5} className="rounded-xl" />
             <Button type="submit" variant="hero" size="xl" disabled={sending} className="w-full sm:w-auto">
-              {sending ? "Sending..." : (<><Send className="h-4 w-4" /> Send Message</>)}
+              { (<><Send className="h-4 w-4" /> Send Message</>)}
             </Button>
           </form>
         </div>
