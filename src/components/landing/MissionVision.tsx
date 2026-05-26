@@ -25,14 +25,14 @@ export function MissionVision() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="relative overflow-hidden rounded-3xl p-8 md:p-12 [background:var(--gradient-soft)] border border-border"
+            className="relative overflow-hidden rounded-3xl p-8 md:p-12 bg-card text-card-foreground border border-border shadow-[var(--shadow-card)]"
           >
             <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full [background:var(--gradient-primary)] opacity-20 blur-2xl" />
             <div className="relative">
               <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl [background:var(--gradient-primary)] shadow-[var(--shadow-glow)] mb-5">
                 <it.icon className="h-7 w-7 text-white" />
               </div>
-              <h3 className="text-2xl md:text-3xl font-bold">{it.title}</h3>
+              <h3 className="text-2xl md:text-3xl font-bold text-card-foreground">{it.title}</h3>
               <p className="mt-4 text-muted-foreground text-lg leading-relaxed">{it.text}</p>
             </div>
           </motion.div>

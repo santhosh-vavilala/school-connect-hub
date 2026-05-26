@@ -50,7 +50,11 @@ export function Footer() {
                   Terms & Conditions
                 </Link>
               </li>
-              <li><a href="#" className="hover:text-foreground">Cookie Policy</a></li>
+              <li>
+                <Link to="/cookie-policy" className="hover:text-foreground">
+                  Cookie Policy
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
