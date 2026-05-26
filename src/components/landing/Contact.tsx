@@ -30,9 +30,9 @@ export function Contact() {
         <div className="grid lg:grid-cols-5 gap-8">
           <div className="lg:col-span-2 space-y-4">
             {[
-              { icon: Mail, label: "Email", value: "hello@schoolconnect.app" },
-              { icon: Phone, label: "Phone", value: "+91 98765 43210" },
-              { icon: MapPin, label: "Address", value: "Bangalore, Karnataka, India" },
+              { icon: Mail, label: "Email", value: "hello@school-connect.app" },
+              { icon: Phone, label: "Phone", value: "+91 95152 20406" },
+              { icon: MapPin, label: "Address", value: "Hyderabad, Telangana, India" },
             ].map((c) => (
               <div key={c.label} className="glass rounded-2xl p-5 flex gap-4 items-center">
                 <div className="h-11 w-11 rounded-xl [background:var(--gradient-primary)] flex items-center justify-center shadow-[var(--shadow-glow)]">

@@ -3,7 +3,7 @@ import { Star } from "lucide-react";
 
 const items = [
   { name: "Priya Sharma", role: "Parent", text: "I never miss an update about my child anymore. The notifications are instant and helpful!" },
-  { name: "Mr. Rajesh Kumar", role: "Principal, Greenwood School", text: "School Connect has completely transformed how we communicate with our 800+ parents." },
+  { name: "Mr. Rajesh Kumar", role: "Parent", text: "School Connect has completely transformed how we communicate with our 800+ parents." },
   { name: "Anita Verma", role: "Teacher", text: "Sharing homework and reaching parents is now effortless. A real time-saver." },
 ];
 

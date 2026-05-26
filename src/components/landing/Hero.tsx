@@ -39,11 +39,11 @@ export function Hero() {
                 <a href="#contact"><MessageCircle className="h-4 w-4" /> Contact Us</a>
               </Button>
             </div>
-            <div className="mt-10 flex gap-8 justify-center lg:justify-start text-sm text-muted-foreground">
+            {/* <div className="mt-10 flex gap-8 justify-center lg:justify-start text-sm text-muted-foreground">
               <div><span className="font-bold text-foreground text-xl">500+</span> Schools</div>
               <div><span className="font-bold text-foreground text-xl">50K+</span> Parents</div>
               <div><span className="font-bold text-foreground text-xl">4.9★</span> Rating</div>
-            </div>
+            </div> */}
           </motion.div>
 
           <motion.div
