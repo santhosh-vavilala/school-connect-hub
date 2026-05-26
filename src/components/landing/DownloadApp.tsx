@@ -24,14 +24,14 @@ export function DownloadApp() {
                 Download School Connect and stay connected anytime, anywhere.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <a href="#" className="inline-flex items-center gap-3 rounded-xl bg-black/30 backdrop-blur px-5 py-3 hover:bg-black/50 transition-colors border border-white/20">
+                <a href="https://apps.apple.com/in/app/school-connect/id6761590610" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-3 rounded-xl bg-black/30 backdrop-blur px-5 py-3 hover:bg-black/50 transition-colors border border-white/20">
                   <Apple className="h-7 w-7" />
                   <div className="text-left">
                     <p className="text-[10px] opacity-80">Download on the</p>
                     <p className="text-sm font-semibold -mt-0.5">App Store</p>
                   </div>
                 </a>
-                <a href="#" className="inline-flex items-center gap-3 rounded-xl bg-black/30 backdrop-blur px-5 py-3 hover:bg-black/50 transition-colors border border-white/20">
+                <a href="https://play.google.com/store/apps/details?id=com.leadingapps.schoolconnect&pcampaignid=web_share" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-3 rounded-xl bg-black/30 backdrop-blur px-5 py-3 hover:bg-black/50 transition-colors border border-white/20">
                   <Play className="h-7 w-7" />
                   <div className="text-left">
                     <p className="text-[10px] opacity-80">Get it on</p>
