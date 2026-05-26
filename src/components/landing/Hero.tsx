@@ -58,7 +58,7 @@ export function Hero() {
               alt="School Connect mobile app preview"
               width={1024}
               height={1024}
-              className="w-full max-w-md animate-float drop-shadow-2xl"
+              className="w-full max-w-md"
             />
           </motion.div>
         </div>
