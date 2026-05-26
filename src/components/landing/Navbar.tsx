@@ -38,7 +38,7 @@ export function Navbar() {
         <nav
           className={cn(
             "flex items-center justify-between rounded-2xl px-4 py-3 transition-all duration-300",
-            scrolled ? "glass shadow-[var(--shadow-soft)]" : "bg-transparent",
+            scrolled ? "bg-white shadow-[var(--shadow-soft)]" : "bg-transparent",
           )}
         >
           <a href="#" className="flex items-center gap-2">
