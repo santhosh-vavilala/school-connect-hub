@@ -73,6 +73,9 @@ export function Navbar() {
             <Button variant="hero" size="sm" className="hidden sm:inline-flex rounded-full" asChild>
               <a href="#download">Get App</a>
             </Button>
+            <Button variant="secondary" size="sm" className="hidden sm:inline-flex rounded-full" asChild>
+              <a href="/login">Login</a>
+            </Button>
             <button
               className="md:hidden flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"
               onClick={() => setOpen((o) => !o)}
@@ -97,6 +100,9 @@ export function Navbar() {
             ))}
             <Button variant="hero" size="sm" className="rounded-full" asChild>
               <a href="#download" onClick={() => setOpen(false)}>Get App</a>
+            </Button>
+            <Button variant="secondary" size="sm" className="rounded-full" asChild>
+              <a href="/login" onClick={() => setOpen(false)}>Login</a>
             </Button>
           </div>
         )}

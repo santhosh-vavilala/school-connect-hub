@@ -13,5 +13,4 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
-  plugins: [netlify()],
 });
