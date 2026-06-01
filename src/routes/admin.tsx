@@ -1367,13 +1367,14 @@ function buildStudentImportPreviewRow(
   index: number,
   classMap: Record<string, string>
 ): StudentImportPreviewRow {
+  const normalizedDob = normalizeImportedDate(String(row.dob || "").trim());
   const data: StudentFormState = {
     name: String(row.name || "").trim(),
     phone: String(row.phone || "").trim(),
     email: String(row.email || "").trim(),
     admissionNumber: String(row.admissionNumber || "").trim(),
     gender: String(row.gender || "").trim().toLowerCase(),
-    dob: String(row.dob || "").trim(),
+    dob: normalizedDob.value,
     rollNumber: String(row.rollNumber || "").trim(),
     fatherName: String(row.fatherName || "").trim(),
     motherName: String(row.motherName || "").trim(),
@@ -1401,8 +1402,8 @@ function buildStudentImportPreviewRow(
   if (data.gender && !["male", "female", "other"].includes(data.gender)) {
     errors.push("Gender must be male, female, or other");
   }
-  if (data.dob && Number.isNaN(Date.parse(data.dob))) {
-    errors.push("Date of birth must be a valid date");
+  if (!normalizedDob.valid) {
+    errors.push("Date of birth must be in YYYY-MM-DD or DD-MM-YYYY format");
   }
   if (data.rollNumber && !/^\d+$/.test(data.rollNumber)) {
     errors.push("Roll number must be numeric");
@@ -1420,4 +1421,42 @@ function buildStudentImportPreviewRow(
     data,
     errors,
   };
+}
+
+function normalizeImportedDate(rawValue: string) {
+  if (!rawValue) {
+    return { valid: true, value: "" };
+  }
+
+  const isoMatch = rawValue.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return {
+      valid: isValidDateParts(Number(year), Number(month), Number(day)),
+      value: `${year}-${month}-${day}`,
+    };
+  }
+
+  const dayFirstMatch = rawValue.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  if (dayFirstMatch) {
+    const [, day, month, year] = dayFirstMatch;
+    return {
+      valid: isValidDateParts(Number(year), Number(month), Number(day)),
+      value: `${year}-${month}-${day}`,
+    };
+  }
+
+  return { valid: false, value: rawValue };
+}
+
+function isValidDateParts(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    Number.isFinite(year) &&
+    Number.isFinite(month) &&
+    Number.isFinite(day) &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
