@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   BookOpen,
+  Download,
   GraduationCap,
   LayoutDashboard,
   Menu,
   Plus,
   School,
+  Upload,
   UserRound,
   Users,
   X,
@@ -129,8 +131,10 @@ function Admin() {
   const [classForm, setClassForm] = useState(emptyClassForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isImportingStudents, setIsImportingStudents] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const studentCsvInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -351,6 +355,72 @@ function Admin() {
     }
   };
 
+  const handleDownloadStudentSampleCsv = () => {
+    const csv = createStudentSampleCsv();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "student-import-sample.csv";
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleStudentCsvSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !schoolId) {
+      return;
+    }
+
+    setIsImportingStudents(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const csvText = await file.text();
+      const rows = parseStudentCsv(csvText);
+
+      if (rows.length === 0) {
+        throw new Error("The CSV file is empty.");
+      }
+
+      const response = (await apiFetch("/students/bulk", {
+        method: "POST",
+        body: JSON.stringify({
+          schoolId,
+          students: rows,
+        }),
+      })) as {
+        total: number;
+        successCount: number;
+        failureCount: number;
+        failures?: Array<{ row: number; message: string; admissionNumber?: string | null }>;
+      };
+
+      await reloadAdminData();
+      setActiveSection("students");
+
+      if (response.failureCount > 0) {
+        const preview = (response.failures || [])
+          .slice(0, 3)
+          .map((failure) => `Row ${failure.row}: ${failure.message}`)
+          .join(" | ");
+        setMessage(
+          `${response.successCount} of ${response.total} students imported. ${response.failureCount} rows failed.${preview ? ` ${preview}` : ""}`
+        );
+      } else {
+        setMessage(`${response.successCount} students imported successfully.`);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Unable to import students from CSV.");
+    } finally {
+      setIsImportingStudents(false);
+      if (event.target) {
+        event.target.value = "";
+      }
+    }
+  };
+
   if (auth.isLoading || isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12 text-slate-900">
@@ -527,6 +597,34 @@ function Admin() {
                   description="All student records for your school."
                   actionLabel="Add student"
                   onAction={() => openModal("student")}
+                  actions={
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <input
+                        ref={studentCsvInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={handleStudentCsvSelected}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleDownloadStudentSampleCsv}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download sample CSV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => studentCsvInputRef.current?.click()}
+                        disabled={isImportingStudents}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {isImportingStudents ? "Importing CSV..." : "Upload CSV"}
+                      </button>
+                    </div>
+                  }
                 >
                   <DataTable
                     columns={["Name", "Admission No.", "Phone", "Class", "Parent", "Status"]}
@@ -769,12 +867,14 @@ function SectionPanel({
   description,
   actionLabel,
   onAction,
+  actions,
   children,
 }: {
   title: string;
   description: string;
   actionLabel: string;
   onAction: () => void;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -784,14 +884,17 @@ function SectionPanel({
           <h2 className="text-2xl font-semibold text-slate-950">{title}</h2>
           <p className="mt-2 text-sm text-slate-500">{description}</p>
         </div>
-        <button
-          type="button"
-          onClick={onAction}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
-        >
-          <Plus className="h-4 w-4" />
-          {actionLabel}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {actions}
+          <button
+            type="button"
+            onClick={onAction}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
+          >
+            <Plus className="h-4 w-4" />
+            {actionLabel}
+          </button>
+        </div>
       </div>
       <div className="mt-6">{children}</div>
     </section>
@@ -1002,4 +1105,119 @@ function SelectField({
       </select>
     </label>
   );
+}
+
+function createStudentSampleCsv() {
+  const headers = [
+    "name",
+    "phone",
+    "email",
+    "admissionNumber",
+    "gender",
+    "dob",
+    "rollNumber",
+    "fatherName",
+    "motherName",
+    "alternatePhone",
+    "address",
+    "classId",
+  ];
+
+  const sampleRow = [
+    "Aarav Kumar",
+    "9876543210",
+    "aarav.parent@example.com",
+    "ADM-001",
+    "male",
+    "2014-06-15",
+    "12",
+    "Ramesh Kumar",
+    "Priya Kumar",
+    "9876500000",
+    "12 MG Road, Bengaluru",
+    "",
+  ];
+
+  return [headers, sampleRow]
+    .map((row) => row.map(escapeCsvValue).join(","))
+    .join("\n");
+}
+
+function parseStudentCsv(csvText: string) {
+  const rows = parseCsvRows(csvText).filter((row) => row.some((cell) => cell.trim() !== ""));
+
+  if (rows.length < 2) {
+    return [];
+  }
+
+  const headers = rows[0].map((header) => header.trim());
+  const requiredHeaders = ["name", "phone", "admissionNumber"];
+  const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
+
+  if (missingHeaders.length > 0) {
+    throw new Error(`Missing required CSV columns: ${missingHeaders.join(", ")}`);
+  }
+
+  return rows.slice(1).map((row, index) => {
+    const record = headers.reduce<Record<string, string>>((accumulator, header, cellIndex) => {
+      accumulator[header] = row[cellIndex]?.trim() || "";
+      return accumulator;
+    }, {});
+
+    return {
+      ...record,
+      rowNumber: index + 2,
+    };
+  });
+}
+
+function parseCsvRows(csvText: string) {
+  const normalized = csvText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    const nextChar = normalized[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      currentRow.push(currentCell);
+      currentCell = "";
+      continue;
+    }
+
+    if (char === "\n" && !inQuotes) {
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+      currentRow = [];
+      currentCell = "";
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  currentRow.push(currentCell);
+  rows.push(currentRow);
+  return rows;
+}
+
+function escapeCsvValue(value: string) {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+
+  return value;
 }
