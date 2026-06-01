@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { GraduationCap, Moon, ShieldCheck, Sparkles, Sun, Users } from "lucide-react";
+import { GraduationCap, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -39,26 +39,11 @@ function Login() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("school-connect-theme");
-    if (savedTheme === "dark") {
-      setDark(true);
-      return;
-    }
-    if (savedTheme === "light") {
-      setDark(false);
-      return;
-    }
-
-    setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.classList.remove("dark");
+    window.localStorage.setItem("school-connect-theme", "light");
   }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    window.localStorage.setItem("school-connect-theme", dark ? "dark" : "light");
-  }, [dark]);
 
   const resetOtpFlow = () => {
     setCode("");
@@ -99,11 +84,11 @@ function Login() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[oklch(0.98_0.015_250)] text-slate-950 transition-colors dark:bg-[oklch(0.14_0.025_265)] dark:text-slate-50">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(61,81,255,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.18),transparent_28%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(86,110,255,0.24),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.16),transparent_28%)]" />
+    <main className="relative min-h-screen overflow-hidden bg-[oklch(0.98_0.015_250)] text-slate-950 transition-colors">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(61,81,255,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.18),transparent_28%)]" />
 
-      <div className="relative mx-auto flex min-h-screen max-w-7xl items-stretch px-4 py-4 sm:px-6 lg:px-8">
-        <div className="grid w-full overflow-hidden rounded-[2rem] border border-white/60 bg-white/80 shadow-[0_24px_80px_-24px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/65 dark:shadow-[0_30px_80px_-20px_rgba(2,6,23,0.72)] lg:grid-cols-[1.08fr_0.92fr]">
+      <div className="relative flex min-h-screen items-stretch">
+        <div className="grid w-full overflow-hidden bg-white/80 backdrop-blur-xl lg:grid-cols-[1.5fr_1fr]">
           <section className="relative hidden overflow-hidden bg-[linear-gradient(155deg,#3148ff_0%,#2b36c9_42%,#121e91_100%)] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
             <div className="absolute inset-0 opacity-35">
               <div className="absolute -left-24 top-12 h-72 w-72 rounded-full border border-white/20" />
@@ -149,48 +134,37 @@ function Login() {
             </div>
           </section>
 
-          <section className="relative flex min-h-[100dvh] flex-col justify-center bg-white/92 px-6 py-8 dark:bg-slate-950/78 sm:px-8 lg:min-h-0 lg:px-10 xl:px-14">
+          <section className="relative flex min-h-[100dvh] flex-col justify-center bg-white/92 px-6 py-8 sm:px-8 lg:min-h-0 lg:px-10 xl:px-14">
             <div className="mx-auto w-full max-w-md">
-              <div className="mb-10 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.35em] text-blue-600 dark:text-cyan-300">
-                    School Connect
-                  </p>
-                  <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
-                    Welcome back
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    Login with your admin mobile number to access the web dashboard.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setDark((current) => !current)}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:border-white/20 dark:hover:text-white"
-                  aria-label="Toggle theme"
-                >
-                  {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                </button>
+              <div className="mb-10">
+                <p className="text-sm font-semibold uppercase tracking-[0.35em] text-blue-600">
+                  School Connect
+                </p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+                  Welcome back
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Login with your admin mobile number to access the web dashboard.
+                </p>
               </div>
 
               <div className="space-y-5">
                 {error && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {error}
                   </div>
                 )}
 
                 {successMessage && (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                     {successMessage}
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Phone number</label>
-                  <div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 dark:border-white/10 dark:bg-slate-900/80 dark:focus-within:border-cyan-300 dark:focus-within:ring-cyan-400/10">
-                    <span className="inline-flex items-center border-r border-slate-200 px-4 text-sm font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">
+                  <label className="block text-sm font-medium text-slate-700">Phone number</label>
+                  <div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-white transition focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10">
+                    <span className="inline-flex items-center border-r border-slate-200 px-4 text-sm font-medium text-slate-500">
                       +91
                     </span>
                     <input
@@ -199,7 +173,7 @@ function Login() {
                       onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
                       placeholder="Enter 10-digit phone number"
                       className={cn(
-                        "w-full bg-transparent px-4 py-3.5 text-sm text-slate-950 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
+                        "w-full bg-transparent px-4 py-3.5 text-sm text-slate-950 outline-none placeholder:text-slate-400"
                       )}
                     />
                   </div>
@@ -207,8 +181,8 @@ function Login() {
 
                 {auth.otpRequestedFor && (
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">OTP code</label>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <label className="block text-sm font-medium text-slate-700">OTP code</label>
+                    <p className="text-xs text-slate-500">
                       OTP sent to {auth.otpRequestedFor.replace("+91", "+91 ")}
                     </p>
                     <input
@@ -217,7 +191,7 @@ function Login() {
                       onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                       placeholder="Enter 6-digit OTP"
                       className={cn(
-                        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-white/10 dark:bg-slate-900/80 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-cyan-300 dark:focus:ring-cyan-400/10"
+                        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                       )}
                     />
                   </div>
@@ -227,7 +201,7 @@ function Login() {
                   <button
                     type="button"
                     onClick={handleSendOtp}
-                    className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
+                    className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
                   >
                     Send OTP
                   </button>
@@ -236,7 +210,7 @@ function Login() {
                     <button
                       type="button"
                       onClick={handleVerifyOtp}
-                      className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-500 dark:bg-cyan-300 dark:text-slate-950 dark:hover:bg-cyan-200"
+                      className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-500"
                     >
                       Verify OTP
                     </button>
@@ -247,13 +221,13 @@ function Login() {
                   <button
                     type="button"
                     onClick={resetOtpFlow}
-                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950 dark:border-white/10 dark:text-slate-300 dark:hover:border-white/20 dark:hover:text-white"
+                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
                   >
                     Request New OTP
                   </button>
                 )}
 
-                <div className="rounded-2xl bg-slate-100/80 px-4 py-4 text-sm leading-6 text-slate-600 dark:bg-white/5 dark:text-slate-400 lg:hidden">
+                <div className="rounded-2xl bg-slate-100/80 px-4 py-4 text-sm leading-6 text-slate-600 lg:hidden">
                   Use the same School Connect login as the mobile app. On desktop, the full admin workspace opens after OTP verification.
                 </div>
               </div>
