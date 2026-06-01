@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Download,
+  IndianRupee,
   GraduationCap,
   LayoutDashboard,
   Menu,
@@ -20,7 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type AdminSection = "overview" | "students" | "teachers" | "classes";
+type AdminSection = "overview" | "students" | "teachers" | "classes" | "fees";
 type ModalType = "student" | "teacher" | "class" | null;
 
 interface DashboardSummary {
@@ -90,6 +91,54 @@ interface StudentImportPreviewRow {
   errors: string[];
 }
 
+interface FeeItemFormState {
+  title: string;
+  amount: string;
+  dueDate: string;
+  notes: string;
+}
+
+interface FeeLedgerRecord {
+  _id: string;
+  childId: string;
+  childName?: string | null;
+  classId?: string | null;
+  className?: string | null;
+  section?: string | null;
+  academicYear: string;
+  feeItems: Array<{ _id?: string; title: string; amount: number; dueDate?: string | null; notes?: string }>;
+  concessionAmount?: number;
+  lateFeeAmount?: number;
+  notes?: string;
+  totalAmount?: number;
+  netAmount?: number;
+  paidAmount?: number;
+  pendingAmount?: number;
+  status?: string;
+  payments?: Array<{
+    _id?: string;
+    amount: number;
+    paymentDate: string;
+    paymentMode: string;
+    referenceNumber?: string;
+    notes?: string;
+    receiptNumber?: string;
+  }>;
+}
+
+interface FeeTemplateRecord {
+  _id: string;
+  classId: string;
+  className?: string | null;
+  section?: string | null;
+  academicYear: string;
+  title?: string;
+  feeItems: Array<{ _id?: string; title: string; amount: number; dueDate?: string | null; notes?: string }>;
+  concessionAmount?: number;
+  lateFeeAmount?: number;
+  notes?: string;
+}
+
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
@@ -117,12 +166,19 @@ const emptyStudentForm: StudentFormState = {
 
 const emptyTeacherForm = { name: "", phone: "" };
 const emptyClassForm = { name: "", section: "" };
+const createEmptyFeeItem = (): FeeItemFormState => ({
+  title: "",
+  amount: "",
+  dueDate: "",
+  notes: "",
+});
 
 const adminMenu = [
   { id: "overview" as const, label: "Dashboard", icon: LayoutDashboard },
   { id: "students" as const, label: "Students", icon: Users },
   { id: "teachers" as const, label: "Teachers", icon: UserRound },
   { id: "classes" as const, label: "Classes", icon: School },
+  { id: "fees" as const, label: "Fees", icon: IndianRupee },
 ];
 
 function Admin() {
@@ -136,9 +192,32 @@ function Admin() {
   const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
+  const [feeLedgers, setFeeLedgers] = useState<FeeLedgerRecord[]>([]);
+  const [feeTemplates, setFeeTemplates] = useState<FeeTemplateRecord[]>([]);
   const [studentForm, setStudentForm] = useState<StudentFormState>(emptyStudentForm);
   const [teacherForm, setTeacherForm] = useState(emptyTeacherForm);
   const [classForm, setClassForm] = useState(emptyClassForm);
+  const [feesView, setFeesView] = useState<"template" | "student">("template");
+  const [selectedFeeClassId, setSelectedFeeClassId] = useState("");
+  const [selectedFeeStudentId, setSelectedFeeStudentId] = useState("");
+  const [editingFeeLedgerId, setEditingFeeLedgerId] = useState<string | null>(null);
+  const [editingFeeTemplateId, setEditingFeeTemplateId] = useState<string | null>(null);
+  const [feeAcademicYear, setFeeAcademicYear] = useState("2026-2027");
+  const [feeItems, setFeeItems] = useState<FeeItemFormState[]>([createEmptyFeeItem()]);
+  const [feeConcessionAmount, setFeeConcessionAmount] = useState("");
+  const [feeLateAmount, setFeeLateAmount] = useState("");
+  const [feeNotes, setFeeNotes] = useState("");
+  const [templateTitle, setTemplateTitle] = useState("");
+  const [templateAcademicYear, setTemplateAcademicYear] = useState("2026-2027");
+  const [templateFeeItems, setTemplateFeeItems] = useState<FeeItemFormState[]>([createEmptyFeeItem()]);
+  const [templateConcessionAmount, setTemplateConcessionAmount] = useState("");
+  const [templateLateAmount, setTemplateLateAmount] = useState("");
+  const [templateNotes, setTemplateNotes] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMode, setPaymentMode] = useState("cash");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isImportingStudents, setIsImportingStudents] = useState(false);
@@ -183,6 +262,14 @@ function Admin() {
       ),
     [classes]
   );
+  const selectedFeeStudentLedgers = useMemo(
+    () => feeLedgers.filter((ledger) => String(ledger.childId) === String(selectedFeeStudentId || "")),
+    [feeLedgers, selectedFeeStudentId]
+  );
+  const selectedClassTemplates = useMemo(
+    () => feeTemplates.filter((template) => String(template.classId) === String(selectedFeeClassId || "")),
+    [feeTemplates, selectedFeeClassId]
+  );
 
   const hasInvalidImportRows = useMemo(
     () => studentImportRows.some((row) => row.errors.length > 0),
@@ -199,11 +286,13 @@ function Admin() {
       setError(null);
 
       try {
-        const [summaryResponse, studentsResponse, teachersResponse, classesResponse] = await Promise.all([
+        const [summaryResponse, studentsResponse, teachersResponse, classesResponse, ledgersResponse, templatesResponse] = await Promise.all([
           apiFetch(`/schools/dashboard-summary/${schoolId}`),
           apiFetch(`/students?schoolId=${schoolId}`),
           apiFetch(`/teachers?schoolId=${schoolId}`),
           apiFetch(`/classes?schoolId=${schoolId}`),
+          apiFetch(`/fees?schoolId=${schoolId}`),
+          apiFetch(`/fees/templates?schoolId=${schoolId}`),
         ]);
 
         setSummary({
@@ -214,6 +303,8 @@ function Admin() {
         setStudents(Array.isArray(studentsResponse) ? (studentsResponse as StudentRecord[]) : []);
         setTeachers(Array.isArray(teachersResponse) ? (teachersResponse as TeacherRecord[]) : []);
         setClasses(Array.isArray(classesResponse) ? (classesResponse as ClassRecord[]) : []);
+        setFeeLedgers(Array.isArray(ledgersResponse) ? (ledgersResponse as FeeLedgerRecord[]) : []);
+        setFeeTemplates(Array.isArray(templatesResponse) ? (templatesResponse as FeeTemplateRecord[]) : []);
       } catch (err: any) {
         console.error(err);
         setError(err?.message || "Unable to load dashboard data.");
@@ -252,11 +343,13 @@ function Admin() {
       return;
     }
 
-    const [summaryResponse, studentsResponse, teachersResponse, classesResponse] = await Promise.all([
+    const [summaryResponse, studentsResponse, teachersResponse, classesResponse, ledgersResponse, templatesResponse] = await Promise.all([
       apiFetch(`/schools/dashboard-summary/${schoolId}`),
       apiFetch(`/students?schoolId=${schoolId}`),
       apiFetch(`/teachers?schoolId=${schoolId}`),
       apiFetch(`/classes?schoolId=${schoolId}`),
+      apiFetch(`/fees?schoolId=${schoolId}`),
+      apiFetch(`/fees/templates?schoolId=${schoolId}`),
     ]);
 
     setSummary({
@@ -267,6 +360,8 @@ function Admin() {
     setStudents(Array.isArray(studentsResponse) ? (studentsResponse as StudentRecord[]) : []);
     setTeachers(Array.isArray(teachersResponse) ? (teachersResponse as TeacherRecord[]) : []);
     setClasses(Array.isArray(classesResponse) ? (classesResponse as ClassRecord[]) : []);
+    setFeeLedgers(Array.isArray(ledgersResponse) ? (ledgersResponse as FeeLedgerRecord[]) : []);
+    setFeeTemplates(Array.isArray(templatesResponse) ? (templatesResponse as FeeTemplateRecord[]) : []);
   };
 
   const closeModal = () => {
@@ -427,6 +522,265 @@ function Admin() {
     setStudentImportOpen(false);
     setStudentImportRows([]);
     setStudentImportFeedback(null);
+  };
+
+  const resetFeeLedgerForm = () => {
+    setEditingFeeLedgerId(null);
+    setFeeAcademicYear("2026-2027");
+    setFeeItems([createEmptyFeeItem()]);
+    setFeeConcessionAmount("");
+    setFeeLateAmount("");
+    setFeeNotes("");
+    setPaymentAmount("");
+    setPaymentMode("cash");
+    setPaymentDate(new Date().toISOString().split("T")[0]);
+    setPaymentReference("");
+    setPaymentNotes("");
+  };
+
+  const resetFeeTemplateForm = () => {
+    setEditingFeeTemplateId(null);
+    setTemplateTitle("");
+    setTemplateAcademicYear("2026-2027");
+    setTemplateFeeItems([createEmptyFeeItem()]);
+    setTemplateConcessionAmount("");
+    setTemplateLateAmount("");
+    setTemplateNotes("");
+  };
+
+  const updateFeeItem = (index: number, key: keyof FeeItemFormState, value: string) => {
+    setFeeItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)));
+  };
+
+  const updateTemplateFeeItem = (index: number, key: keyof FeeItemFormState, value: string) => {
+    setTemplateFeeItems((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item))
+    );
+  };
+
+  const loadFeeLedgerIntoForm = (ledger: FeeLedgerRecord) => {
+    setEditingFeeLedgerId(ledger._id);
+    setSelectedFeeStudentId(String(ledger.childId || ""));
+    setFeeAcademicYear(ledger.academicYear || "2026-2027");
+    setFeeItems(
+      Array.isArray(ledger.feeItems) && ledger.feeItems.length > 0
+        ? ledger.feeItems.map((item) => ({
+            title: item.title || "",
+            amount: String(item.amount ?? ""),
+            dueDate: item.dueDate ? String(item.dueDate).split("T")[0] : "",
+            notes: item.notes || "",
+          }))
+        : [createEmptyFeeItem()]
+    );
+    setFeeConcessionAmount(ledger.concessionAmount ? String(ledger.concessionAmount) : "");
+    setFeeLateAmount(ledger.lateFeeAmount ? String(ledger.lateFeeAmount) : "");
+    setFeeNotes(ledger.notes || "");
+    setPaymentAmount("");
+    setPaymentMode("cash");
+    setPaymentDate(new Date().toISOString().split("T")[0]);
+    setPaymentReference("");
+    setPaymentNotes("");
+    setMessage(null);
+    setError(null);
+  };
+
+  const loadFeeTemplateIntoForm = (template: FeeTemplateRecord) => {
+    setEditingFeeTemplateId(template._id);
+    setSelectedFeeClassId(String(template.classId || ""));
+    setTemplateTitle(template.title || "");
+    setTemplateAcademicYear(template.academicYear || "2026-2027");
+    setTemplateFeeItems(
+      Array.isArray(template.feeItems) && template.feeItems.length > 0
+        ? template.feeItems.map((item) => ({
+            title: item.title || "",
+            amount: String(item.amount ?? ""),
+            dueDate: item.dueDate ? String(item.dueDate).split("T")[0] : "",
+            notes: item.notes || "",
+          }))
+        : [createEmptyFeeItem()]
+    );
+    setTemplateConcessionAmount(template.concessionAmount ? String(template.concessionAmount) : "");
+    setTemplateLateAmount(template.lateFeeAmount ? String(template.lateFeeAmount) : "");
+    setTemplateNotes(template.notes || "");
+    setMessage(null);
+    setError(null);
+  };
+
+  const saveFeeTemplate = async () => {
+    if (!schoolId || !selectedFeeClassId) {
+      setError("Please select a class for the fee template.");
+      return;
+    }
+
+    const normalizedItems = templateFeeItems
+      .filter((item) => item.title.trim() && item.amount.trim())
+      .map((item) => ({
+        title: item.title.trim(),
+        amount: Number(item.amount) || 0,
+        dueDate: item.dueDate || null,
+        notes: item.notes.trim(),
+      }));
+
+    if (normalizedItems.length === 0) {
+      setError("Add at least one fee item to the template.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const payload = {
+        schoolId,
+        classId: selectedFeeClassId,
+        academicYear: templateAcademicYear.trim(),
+        title: templateTitle.trim(),
+        feeItems: normalizedItems,
+        concessionAmount: Number(templateConcessionAmount) || 0,
+        lateFeeAmount: Number(templateLateAmount) || 0,
+        notes: templateNotes.trim(),
+      };
+
+      if (editingFeeTemplateId) {
+        await apiFetch(`/fees/templates/${editingFeeTemplateId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        setMessage("Fee template updated.");
+      } else {
+        await apiFetch("/fees/templates", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setMessage("Fee template created.");
+      }
+
+      await reloadAdminData();
+      if (!editingFeeTemplateId) {
+        resetFeeTemplateForm();
+      }
+    } catch (err: any) {
+      setError(err?.message || "Unable to save fee template.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const assignTemplateToClass = async () => {
+    if (!editingFeeTemplateId) {
+      setError("Select an existing fee template before bulk assigning.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = (await apiFetch(`/fees/templates/${editingFeeTemplateId}/assign`, {
+        method: "POST",
+      })) as { message?: string };
+      setMessage(response?.message || "Fee template assigned.");
+      await reloadAdminData();
+    } catch (err: any) {
+      setError(err?.message || "Unable to assign fee template.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveFeeLedger = async () => {
+    if (!schoolId || !selectedFeeStudentId) {
+      setError("Please select a student.");
+      return;
+    }
+
+    const normalizedItems = feeItems
+      .filter((item) => item.title.trim() && item.amount.trim())
+      .map((item) => ({
+        title: item.title.trim(),
+        amount: Number(item.amount) || 0,
+        dueDate: item.dueDate || null,
+        notes: item.notes.trim(),
+      }));
+
+    if (normalizedItems.length === 0) {
+      setError("Add at least one fee item.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const payload = {
+        schoolId,
+        childId: selectedFeeStudentId,
+        academicYear: feeAcademicYear.trim(),
+        feeItems: normalizedItems,
+        concessionAmount: Number(feeConcessionAmount) || 0,
+        lateFeeAmount: Number(feeLateAmount) || 0,
+        notes: feeNotes.trim(),
+      };
+
+      if (editingFeeLedgerId) {
+        await apiFetch(`/fees/${editingFeeLedgerId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        setMessage("Fee ledger updated.");
+      } else {
+        await apiFetch("/fees", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setMessage("Fee ledger created.");
+      }
+
+      await reloadAdminData();
+      if (!editingFeeLedgerId) {
+        resetFeeLedgerForm();
+      }
+    } catch (err: any) {
+      setError(err?.message || "Unable to save fee ledger.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const recordFeePayment = async () => {
+    if (!editingFeeLedgerId) {
+      setError("Select an existing fee ledger before recording payment.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await apiFetch(`/fees/${editingFeeLedgerId}/payments`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: Number(paymentAmount) || 0,
+          paymentMode,
+          paymentDate,
+          referenceNumber: paymentReference.trim(),
+          notes: paymentNotes.trim(),
+        }),
+      });
+      setMessage("Payment recorded.");
+      setPaymentAmount("");
+      setPaymentReference("");
+      setPaymentNotes("");
+      await reloadAdminData();
+    } catch (err: any) {
+      setError(err?.message || "Unable to record payment.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -769,6 +1123,292 @@ function Admin() {
                   />
                 </SectionPanel>
               )}
+
+              {activeSection === "fees" && (
+                <SectionPanel
+                  title="Fees"
+                  description="Create class fee templates, assign them in bulk, and manage student-specific fee ledgers."
+                  actionLabel={feesView === "template" ? "Save template" : "Save ledger"}
+                  onAction={() => {
+                    void (feesView === "template" ? saveFeeTemplate() : saveFeeLedger());
+                  }}
+                  actions={
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => setFeesView("template")}
+                        className={cn(
+                          "inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                          feesView === "template"
+                            ? "bg-slate-950 text-white"
+                            : "border border-slate-200 bg-white text-slate-700"
+                        )}
+                      >
+                        Fee templates
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFeesView("student")}
+                        className={cn(
+                          "inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                          feesView === "student"
+                            ? "bg-slate-950 text-white"
+                            : "border border-slate-200 bg-white text-slate-700"
+                        )}
+                      >
+                        Student ledger
+                      </button>
+                    </div>
+                  }
+                >
+                  {feesView === "template" ? (
+                    <div className="space-y-8">
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <SelectField
+                          label="Class"
+                          value={selectedFeeClassId}
+                          onChange={(value) => setSelectedFeeClassId(value)}
+                          options={[
+                            { value: "", label: "Select class" },
+                            ...classes.map((item) => ({
+                              value: item._id,
+                              label: `${item.name}${item.section ? ` - ${item.section}` : ""}`,
+                            })),
+                          ]}
+                        />
+                        <TextField label="Academic year" value={templateAcademicYear} onChange={setTemplateAcademicYear} />
+                        <TextField label="Template title" value={templateTitle} onChange={setTemplateTitle} />
+                        <TextField
+                          label="Concession amount"
+                          value={templateConcessionAmount}
+                          onChange={setTemplateConcessionAmount}
+                        />
+                        <TextField
+                          label="Late fee amount"
+                          value={templateLateAmount}
+                          onChange={setTemplateLateAmount}
+                        />
+                      </div>
+
+                      <TextAreaField label="Template notes" value={templateNotes} onChange={setTemplateNotes} />
+
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-slate-950">Fee items</h3>
+                          <button
+                            type="button"
+                            onClick={() => setTemplateFeeItems((current) => [...current, createEmptyFeeItem()])}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add item
+                          </button>
+                        </div>
+
+                        {templateFeeItems.map((item, index) => (
+                          <FeeItemEditor
+                            key={`template-item-${index}`}
+                            item={item}
+                            index={index}
+                            onChange={updateTemplateFeeItem}
+                            onRemove={
+                              templateFeeItems.length > 1
+                                ? () =>
+                                    setTemplateFeeItems((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void saveFeeTemplate();
+                          }}
+                          disabled={isSaving}
+                          className="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-60"
+                        >
+                          {editingFeeTemplateId ? "Update template" : "Create template"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void assignTemplateToClass();
+                          }}
+                          disabled={isSaving || !editingFeeTemplateId}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700 disabled:opacity-60"
+                        >
+                          Assign template to class
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetFeeTemplateForm}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          Reset
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-slate-950">Existing templates</h3>
+                        {selectedClassTemplates.length === 0 ? (
+                          <EmptyState message="Choose a class to view or manage its fee templates." />
+                        ) : (
+                          selectedClassTemplates.map((template) => (
+                            <RecordCard
+                              key={template._id}
+                              title={template.title || template.academicYear}
+                              subtitle={`${template.className || "Class"}${template.section ? ` - ${template.section}` : ""}`}
+                              meta={[
+                                `Academic year: ${template.academicYear}`,
+                                `${template.feeItems?.length || 0} fee items`,
+                                `Concession: Rs. ${template.concessionAmount || 0}`,
+                                `Late fee: Rs. ${template.lateFeeAmount || 0}`,
+                              ]}
+                              onClick={() => loadFeeTemplateIntoForm(template)}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <SelectField
+                          label="Student"
+                          value={selectedFeeStudentId}
+                          onChange={(value) => setSelectedFeeStudentId(value)}
+                          options={[
+                            { value: "", label: "Select student" },
+                            ...students.map((student) => ({
+                              value: student._id,
+                              label: `${student.name}${student.admissionNumber ? ` - ${student.admissionNumber}` : ""}`,
+                            })),
+                          ]}
+                        />
+                        <TextField label="Academic year" value={feeAcademicYear} onChange={setFeeAcademicYear} />
+                        <TextField
+                          label="Concession amount"
+                          value={feeConcessionAmount}
+                          onChange={setFeeConcessionAmount}
+                        />
+                        <TextField label="Late fee amount" value={feeLateAmount} onChange={setFeeLateAmount} />
+                      </div>
+
+                      <TextAreaField label="Ledger notes" value={feeNotes} onChange={setFeeNotes} />
+
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-slate-950">Fee items</h3>
+                          <button
+                            type="button"
+                            onClick={() => setFeeItems((current) => [...current, createEmptyFeeItem()])}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add item
+                          </button>
+                        </div>
+
+                        {feeItems.map((item, index) => (
+                          <FeeItemEditor
+                            key={`ledger-item-${index}`}
+                            item={item}
+                            index={index}
+                            onChange={updateFeeItem}
+                            onRemove={
+                              feeItems.length > 1
+                                ? () => setFeeItems((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void saveFeeLedger();
+                          }}
+                          disabled={isSaving}
+                          className="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-60"
+                        >
+                          {editingFeeLedgerId ? "Update ledger" : "Create ledger"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetFeeLedgerForm}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          Reset
+                        </button>
+                      </div>
+
+                      {editingFeeLedgerId && (
+                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                          <h3 className="text-lg font-semibold text-slate-950">Record offline payment</h3>
+                          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                            <TextField label="Payment amount" value={paymentAmount} onChange={setPaymentAmount} />
+                            <SelectField
+                              label="Payment mode"
+                              value={paymentMode}
+                              onChange={setPaymentMode}
+                              options={[
+                                { value: "cash", label: "Cash" },
+                                { value: "upi", label: "UPI" },
+                                { value: "bank_transfer", label: "Bank transfer" },
+                                { value: "cheque", label: "Cheque" },
+                              ]}
+                            />
+                            <TextField label="Payment date" type="date" value={paymentDate} onChange={setPaymentDate} />
+                            <TextField label="Reference number" value={paymentReference} onChange={setPaymentReference} />
+                          </div>
+                          <div className="mt-4">
+                            <TextAreaField label="Payment notes" value={paymentNotes} onChange={setPaymentNotes} />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void recordFeePayment();
+                            }}
+                            disabled={isSaving}
+                            className="mt-4 inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                          >
+                            Record payment
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-slate-950">Existing ledgers</h3>
+                        {!selectedFeeStudentId ? (
+                          <EmptyState message="Select a student to view or manage fee ledgers." />
+                        ) : selectedFeeStudentLedgers.length === 0 ? (
+                          <EmptyState message="No fee ledger exists yet for this student." />
+                        ) : (
+                          selectedFeeStudentLedgers.map((ledger) => (
+                            <RecordCard
+                              key={ledger._id}
+                              title={ledger.academicYear}
+                              subtitle={`${ledger.childName || "Student"}${ledger.className ? ` · ${ledger.className}${ledger.section ? ` - ${ledger.section}` : ""}` : ""}`}
+                              meta={[
+                                `Status: ${ledger.status || "unpaid"}`,
+                                `Total: Rs. ${ledger.netAmount || 0}`,
+                                `Paid: Rs. ${ledger.paidAmount || 0}`,
+                                `Pending: Rs. ${ledger.pendingAmount || 0}`,
+                              ]}
+                              onClick={() => loadFeeLedgerIntoForm(ledger)}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </SectionPanel>
+              )}
             </div>
           </div>
         </div>
@@ -1066,6 +1706,85 @@ function SectionPanel({
       </div>
       <div className="mt-6">{children}</div>
     </section>
+  );
+}
+
+function FeeItemEditor({
+  item,
+  index,
+  onChange,
+  onRemove,
+}: {
+  item: FeeItemFormState;
+  index: number;
+  onChange: (index: number, key: keyof FeeItemFormState, value: string) => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-slate-950">Fee item {index + 1}</h4>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TextField label="Title" value={item.title} onChange={(value) => onChange(index, "title", value)} />
+        <TextField label="Amount" value={item.amount} onChange={(value) => onChange(index, "amount", value)} />
+        <TextField label="Due date" type="date" value={item.dueDate} onChange={(value) => onChange(index, "dueDate", value)} />
+      </div>
+      <div className="mt-4">
+        <TextAreaField label="Notes" value={item.notes} onChange={(value) => onChange(index, "notes", value)} />
+      </div>
+    </div>
+  );
+}
+
+function RecordCard({
+  title,
+  subtitle,
+  meta,
+  onClick,
+}: {
+  title: string;
+  subtitle: string;
+  meta: string[];
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-3xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-sky-200 hover:bg-sky-50/40"
+    >
+      <div className="flex flex-col gap-2">
+        <div>
+          <p className="text-base font-semibold text-slate-950">{title}</p>
+          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {meta.map((item) => (
+            <span key={item} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-sm text-slate-500">
+      {message}
+    </div>
   );
 }
 
