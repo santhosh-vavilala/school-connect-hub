@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   BookOpen,
+  CheckCircle2,
+  CircleAlert,
   Download,
   GraduationCap,
   LayoutDashboard,
   Menu,
   Plus,
   School,
+  Trash2,
   Upload,
   UserRound,
   Users,
@@ -80,6 +83,13 @@ interface StudentFormState {
   classId: string;
 }
 
+interface StudentImportPreviewRow {
+  id: string;
+  rowNumber: number;
+  data: StudentFormState;
+  errors: string[];
+}
+
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
@@ -132,6 +142,8 @@ function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isImportingStudents, setIsImportingStudents] = useState(false);
+  const [studentImportRows, setStudentImportRows] = useState<StudentImportPreviewRow[]>([]);
+  const [studentImportOpen, setStudentImportOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const studentCsvInputRef = useRef<HTMLInputElement | null>(null);
@@ -166,6 +178,11 @@ function Admin() {
         classes.map((item) => [item._id, `${item.name}${item.section ? ` - ${item.section}` : ""}`])
       ),
     [classes]
+  );
+
+  const hasInvalidImportRows = useMemo(
+    () => studentImportRows.some((row) => row.errors.length > 0),
+    [studentImportRows]
   );
 
   useEffect(() => {
@@ -368,7 +385,7 @@ function Admin() {
 
   const handleStudentCsvSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !schoolId) {
+    if (!file) {
       return;
     }
 
@@ -384,21 +401,62 @@ function Admin() {
         throw new Error("The CSV file is empty.");
       }
 
+      const previewRows = rows.map((row, index) => buildStudentImportPreviewRow(row, index, classMap));
+      setStudentImportRows(previewRows);
+      setStudentImportOpen(true);
+      setActiveSection("students");
+    } catch (err: any) {
+      setError(err?.message || "Unable to import students from CSV.");
+    } finally {
+      setIsImportingStudents(false);
+      if (event.target) {
+        event.target.value = "";
+      }
+    }
+  };
+
+  const removeStudentImportRow = (rowId: string) => {
+    setStudentImportRows((current) => current.filter((row) => row.id !== rowId));
+  };
+
+  const closeStudentImport = () => {
+    setStudentImportOpen(false);
+    setStudentImportRows([]);
+  };
+
+  const handleConfirmStudentImport = async () => {
+    if (!schoolId || studentImportRows.length === 0) {
+      return;
+    }
+
+    if (hasInvalidImportRows) {
+      setError("Please fix or remove all invalid rows before confirming the import.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
       const response = (await apiFetch("/students/bulk", {
         method: "POST",
         body: JSON.stringify({
           schoolId,
-          students: rows,
+          students: studentImportRows.map((row) => ({
+            ...row.data,
+            rowNumber: row.rowNumber,
+          })),
         }),
       })) as {
         total: number;
         successCount: number;
         failureCount: number;
-        failures?: Array<{ row: number; message: string; admissionNumber?: string | null }>;
+        failures?: Array<{ row: number; message: string }>;
       };
 
       await reloadAdminData();
-      setActiveSection("students");
+      closeStudentImport();
 
       if (response.failureCount > 0) {
         const preview = (response.failures || [])
@@ -412,12 +470,9 @@ function Admin() {
         setMessage(`${response.successCount} students imported successfully.`);
       }
     } catch (err: any) {
-      setError(err?.message || "Unable to import students from CSV.");
+      setError(err?.message || "Unable to save imported students.");
     } finally {
-      setIsImportingStudents(false);
-      if (event.target) {
-        event.target.value = "";
-      }
+      setIsSaving(false);
     }
   };
 
@@ -757,6 +812,79 @@ function Admin() {
           )}
         </ModalShell>
       )}
+
+      {studentImportOpen && (
+        <ModalShell
+          title="Review imported students"
+          maxWidthClass="w-[75vw] max-w-6xl"
+          footer={
+            <ModalActions
+              onClose={closeStudentImport}
+              onSubmit={handleConfirmStudentImport}
+              isSaving={isSaving}
+              submitLabel={hasInvalidImportRows ? "Resolve invalid rows to continue" : "Confirm and save"}
+              submitDisabled={studentImportRows.length === 0 || hasInvalidImportRows}
+            />
+          }
+          onClose={closeStudentImport}
+        >
+          <div className="space-y-4">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              Review the imported rows before saving. Rows with a red status have validation issues. You can remove any rows you do not want to import.
+            </div>
+
+            <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
+              <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
+                <thead className="bg-white text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Row</th>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Admission No.</th>
+                    <th className="px-4 py-3">Phone</th>
+                    <th className="px-4 py-3">Class ID</th>
+                    <th className="px-4 py-3">Notes</th>
+                    <th className="px-4 py-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {studentImportRows.map((row) => {
+                    const isValid = row.errors.length === 0;
+                    return (
+                      <tr key={row.id} className="align-top hover:bg-slate-100/80">
+                        <td className="px-4 py-3">
+                          {isValid ? (
+                            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                          ) : (
+                            <CircleAlert className="h-5 w-5 text-red-500" />
+                          )}
+                        </td>
+                        <td className="px-4 py-3">{row.rowNumber}</td>
+                        <td className="px-4 py-3">{row.data.name || "-"}</td>
+                        <td className="px-4 py-3">{row.data.admissionNumber || "-"}</td>
+                        <td className="px-4 py-3">{row.data.phone || "-"}</td>
+                        <td className="px-4 py-3">{row.data.classId || "-"}</td>
+                        <td className="w-[200px] min-w-[200px] px-4 py-3 text-xs leading-5 text-slate-500">
+                          {isValid ? "Ready to import" : row.errors.join(" | ")}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => removeStudentImportRow(row.id)}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 p-2 text-slate-500 transition hover:border-red-200 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </ModalShell>
+      )}
     </main>
   );
 }
@@ -966,16 +1094,23 @@ function ModalShell({
   title,
   children,
   footer,
+  maxWidthClass,
   onClose,
 }: {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  maxWidthClass?: string;
   onClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6">
-      <div className="w-full max-w-3xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-300/50">
+      <div
+        className={cn(
+          "w-full max-w-3xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-300/50",
+          maxWidthClass
+        )}
+      >
         <div className="flex max-h-[90vh] flex-col">
           <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-6 sm:px-8 sm:py-6">
             <div className="flex items-center justify-between">
@@ -1007,10 +1142,14 @@ function ModalActions({
   onClose,
   onSubmit,
   isSaving,
+  submitLabel = "Save",
+  submitDisabled = false,
 }: {
   onClose: () => void;
   onSubmit: () => void;
   isSaving: boolean;
+  submitLabel?: string;
+  submitDisabled?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -1024,10 +1163,10 @@ function ModalActions({
       <button
         type="button"
         onClick={onSubmit}
-        disabled={isSaving}
+        disabled={isSaving || submitDisabled}
         className="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isSaving ? "Saving..." : "Save"}
+        {isSaving ? "Saving..." : submitLabel}
       </button>
     </div>
   );
@@ -1221,4 +1360,64 @@ function escapeCsvValue(value: string) {
   }
 
   return value;
+}
+
+function buildStudentImportPreviewRow(
+  row: Record<string, string | number>,
+  index: number,
+  classMap: Record<string, string>
+): StudentImportPreviewRow {
+  const data: StudentFormState = {
+    name: String(row.name || "").trim(),
+    phone: String(row.phone || "").trim(),
+    email: String(row.email || "").trim(),
+    admissionNumber: String(row.admissionNumber || "").trim(),
+    gender: String(row.gender || "").trim().toLowerCase(),
+    dob: String(row.dob || "").trim(),
+    rollNumber: String(row.rollNumber || "").trim(),
+    fatherName: String(row.fatherName || "").trim(),
+    motherName: String(row.motherName || "").trim(),
+    alternatePhone: String(row.alternatePhone || "").trim(),
+    address: String(row.address || "").trim(),
+    classId: String(row.classId || "").trim(),
+  };
+
+  const errors: string[] = [];
+
+  if (!data.name) {
+    errors.push("Student name is required");
+  }
+  if (!data.phone) {
+    errors.push("Phone is required");
+  } else if (!/^\d{10}$/.test(data.phone)) {
+    errors.push("Phone must be a 10-digit number");
+  }
+  if (!data.admissionNumber) {
+    errors.push("Admission number is required");
+  }
+  if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+    errors.push("Email format is invalid");
+  }
+  if (data.gender && !["male", "female", "other"].includes(data.gender)) {
+    errors.push("Gender must be male, female, or other");
+  }
+  if (data.dob && Number.isNaN(Date.parse(data.dob))) {
+    errors.push("Date of birth must be a valid date");
+  }
+  if (data.rollNumber && !/^\d+$/.test(data.rollNumber)) {
+    errors.push("Roll number must be numeric");
+  }
+  if (data.alternatePhone && !/^\d{10}$/.test(data.alternatePhone)) {
+    errors.push("Alternate phone must be a 10-digit number");
+  }
+  if (data.classId && !classMap[data.classId]) {
+    errors.push("Class ID was not found in the current class list");
+  }
+
+  return {
+    id: `${data.admissionNumber || "row"}-${index}`,
+    rowNumber: Number(row.rowNumber || index + 2),
+    data,
+    errors,
+  };
 }
