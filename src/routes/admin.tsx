@@ -463,7 +463,7 @@ function Admin() {
           </div>
         )}
 
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
             <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-10">
               <div className="flex items-center gap-3">
@@ -476,18 +476,11 @@ function Admin() {
                 </button>
                 <div>
                   <p className="text-sm uppercase tracking-[0.3em] text-sky-600">Dashboard</p>
-                  <h1 className="mt-1 text-2xl font-semibold text-slate-950">
+                  <h1 className="mt-0 text-2xl font-semibold text-slate-950">
                     Welcome back, {auth.user.name || "Admin"}!
                   </h1>
                 </div>
               </div>
-
-              <button
-                onClick={auth.signOut}
-                className="hidden rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-400 sm:inline-flex"
-              >
-                Sign out
-              </button>
             </div>
           </header>
 
@@ -506,7 +499,7 @@ function Admin() {
                 <StatCard
                   label="Teachers"
                   value={summary.teachers}
-                  icon={GraduationCap}
+                  icon={UserRound}
                   accent="from-emerald-500 to-teal-400"
                 />
                 <StatCard
@@ -608,6 +601,19 @@ function Admin() {
                 ? "Add new teacher"
                 : "Add new class"
           }
+          footer={
+            <ModalActions
+              onClose={closeModal}
+              onSubmit={
+                modalType === "student"
+                  ? handleAddStudent
+                  : modalType === "teacher"
+                    ? handleAddTeacher
+                    : handleAddClass
+              }
+              isSaving={isSaving}
+            />
+          }
           onClose={closeModal}
         >
           {modalType === "student" && (
@@ -641,7 +647,6 @@ function Admin() {
                 <TextField label="Alternate phone" value={studentForm.alternatePhone} onChange={(value) => setStudentForm((prev) => ({ ...prev, alternatePhone: value }))} />
               </div>
               <TextAreaField label="Address" value={studentForm.address} onChange={(value) => setStudentForm((prev) => ({ ...prev, address: value }))} />
-              <ModalActions onClose={closeModal} onSubmit={handleAddStudent} isSaving={isSaving} />
             </div>
           )}
 
@@ -649,7 +654,6 @@ function Admin() {
             <div className="space-y-4">
               <TextField label="Teacher name" value={teacherForm.name} onChange={(value) => setTeacherForm((prev) => ({ ...prev, name: value }))} />
               <TextField label="Phone" value={teacherForm.phone} onChange={(value) => setTeacherForm((prev) => ({ ...prev, phone: value }))} />
-              <ModalActions onClose={closeModal} onSubmit={handleAddTeacher} isSaving={isSaving} />
             </div>
           )}
 
@@ -657,7 +661,6 @@ function Admin() {
             <div className="space-y-4">
               <TextField label="Class name" value={classForm.name} onChange={(value) => setClassForm((prev) => ({ ...prev, name: value }))} />
               <TextField label="Section" value={classForm.section} onChange={(value) => setClassForm((prev) => ({ ...prev, section: value }))} />
-              <ModalActions onClose={closeModal} onSubmit={handleAddClass} isSaving={isSaving} />
             </div>
           )}
         </ModalShell>
@@ -686,7 +689,7 @@ function SidebarContent({
       <div className="flex items-center justify-between border-b border-slate-200 px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-lg shadow-sky-200">
-            <School className="h-5 w-5" />
+            <GraduationCap className="h-5 w-5" />
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-950">School Connect</p>
@@ -794,7 +797,7 @@ function SectionPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-8">
+    <section className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-slate-950">{title}</h2>
@@ -832,7 +835,7 @@ function DataTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
+    <div className="w-full max-w-full overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
         <thead className="bg-white text-slate-500">
           <tr>
@@ -877,26 +880,39 @@ function InlineBanner({ tone, message }: { tone: "success" | "error"; message: s
 function ModalShell({
   title,
   children,
+  footer,
   onClose,
 }: {
   title: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   onClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-300/50 sm:p-8">
-        <div className="flex items-center justify-between">
-          <h3 className="text-2xl font-semibold text-slate-950">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
-          >
-            <X className="h-5 w-5" />
-          </button>
+      <div className="w-full max-w-3xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-300/50">
+        <div className="flex max-h-[90vh] flex-col">
+          <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-6 sm:px-8 sm:py-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-semibold text-slate-950">{title}</h3>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="scrollbar-clean min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8">
+            {children}
+          </div>
+          {footer && (
+            <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-5 sm:px-8">
+              {footer}
+            </div>
+          )}
         </div>
-        <div className="mt-6">{children}</div>
       </div>
     </div>
   );
@@ -912,7 +928,7 @@ function ModalActions({
   isSaving: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:justify-end">
+    <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
       <button
         type="button"
         onClick={onClose}
