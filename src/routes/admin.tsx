@@ -668,8 +668,9 @@ function Admin() {
                   onAction={() => openModal("class")}
                 >
                   <DataTable
-                    columns={["Class", "Section", "Assigned teacher"]}
+                    columns={["Class ID", "Class", "Section", "Assigned teacher"]}
                     rows={classes.map((item) => [
+                      item._id || "-",
                       item.name || "-",
                       item.section || "-",
                       item.teacherId?.name || "Not assigned",
