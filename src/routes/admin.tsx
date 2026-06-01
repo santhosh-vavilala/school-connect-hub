@@ -512,18 +512,11 @@ function Admin() {
 
               {activeSection === "overview" && (
                 <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-8">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <h2 className="text-2xl font-semibold text-slate-950">School snapshot</h2>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                        Use the left menu to manage students, teachers, and classes. Each section shows your current records and lets you add new entries from a modal without leaving the page.
-                      </p>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <QuickActionButton label="Add student" onClick={() => openModal("student")} />
-                      <QuickActionButton label="Add teacher" onClick={() => openModal("teacher")} />
-                      <QuickActionButton label="Add class" onClick={() => openModal("class")} />
-                    </div>
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-950">School snapshot</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                      Use the left menu to manage students, teachers, and classes. Each section shows your current records and lets you add new entries from a modal without leaving the page.
+                    </p>
                   </div>
                 </section>
               )}
@@ -768,18 +761,6 @@ function StatCard({
         </div>
       </div>
     </div>
-  );
-}
-
-function QuickActionButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
-    >
-      {label}
-    </button>
   );
 }
 
