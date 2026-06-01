@@ -144,6 +144,10 @@ function Admin() {
   const [isImportingStudents, setIsImportingStudents] = useState(false);
   const [studentImportRows, setStudentImportRows] = useState<StudentImportPreviewRow[]>([]);
   const [studentImportOpen, setStudentImportOpen] = useState(false);
+  const [studentImportFeedback, setStudentImportFeedback] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const studentCsvInputRef = useRef<HTMLInputElement | null>(null);
@@ -422,6 +426,7 @@ function Admin() {
   const closeStudentImport = () => {
     setStudentImportOpen(false);
     setStudentImportRows([]);
+    setStudentImportFeedback(null);
   };
 
   const handleConfirmStudentImport = async () => {
@@ -437,6 +442,7 @@ function Admin() {
     setIsSaving(true);
     setError(null);
     setMessage(null);
+    setStudentImportFeedback(null);
 
     try {
       const response = (await apiFetch("/students/bulk", {
@@ -452,25 +458,44 @@ function Admin() {
         total: number;
         successCount: number;
         failureCount: number;
-        failures?: Array<{ row: number; message: string }>;
+        failures?: Array<{ row: number; message: string; admissionNumber?: string | null }>;
       };
 
       await reloadAdminData();
-      closeStudentImport();
 
-      if (response.failureCount > 0) {
+      if (response.failureCount === 0) {
+        closeStudentImport();
+        setMessage(`${response.successCount} students imported successfully.`);
+      } else {
+        const failureMap = new Map((response.failures || []).map((failure) => [failure.row, failure.message]));
+
+        setStudentImportRows((current) =>
+          current
+            .filter((row) => failureMap.has(row.rowNumber))
+            .map((row) => ({
+              ...row,
+              errors: [failureMap.get(row.rowNumber) || "Unable to import student"],
+            }))
+        );
+
         const preview = (response.failures || [])
           .slice(0, 3)
           .map((failure) => `Row ${failure.row}: ${failure.message}`)
           .join(" | ");
-        setMessage(
-          `${response.successCount} of ${response.total} students imported. ${response.failureCount} rows failed.${preview ? ` ${preview}` : ""}`
-        );
-      } else {
-        setMessage(`${response.successCount} students imported successfully.`);
+
+        setStudentImportFeedback({
+          tone: response.successCount > 0 ? "success" : "error",
+          message:
+            response.successCount > 0
+              ? `${response.successCount} students were saved. ${response.failureCount} rows still need attention.${preview ? ` ${preview}` : ""}`
+              : `No students were saved. ${response.failureCount} rows failed validation.${preview ? ` ${preview}` : ""}`,
+        });
       }
     } catch (err: any) {
-      setError(err?.message || "Unable to save imported students.");
+      setStudentImportFeedback({
+        tone: "error",
+        message: err?.message || "Unable to save imported students.",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -832,6 +857,10 @@ function Admin() {
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
               Review the imported rows before saving. Rows with a red status have validation issues. You can remove any rows you do not want to import.
             </div>
+
+            {studentImportFeedback && (
+              <InlineBanner tone={studentImportFeedback.tone} message={studentImportFeedback.message} />
+            )}
 
             <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
               <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
