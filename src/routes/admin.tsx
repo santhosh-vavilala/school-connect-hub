@@ -429,6 +429,14 @@ function Admin() {
     setStudentImportFeedback(null);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+    } finally {
+      navigate({ to: "/login" });
+    }
+  };
+
   const handleConfirmStudentImport = async () => {
     if (!schoolId || studentImportRows.length === 0) {
       return;
@@ -538,7 +546,9 @@ function Admin() {
                 <p className="mt-2 text-sm text-slate-500">View the full School Connect user base from one place.</p>
               </div>
               <button
-                onClick={auth.signOut}
+                onClick={() => {
+                  void handleSignOut();
+                }}
                 className="inline-flex items-center justify-center rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-400"
               >
                 Sign out
@@ -588,7 +598,7 @@ function Admin() {
             activeSection={activeSection}
             onNavigate={setActiveSection}
             userName={auth.user.name || "Admin"}
-            onSignOut={auth.signOut}
+            onSignOut={handleSignOut}
           />
         </aside>
 
@@ -605,7 +615,7 @@ function Admin() {
                   setMobileMenuOpen(false);
                 }}
                 userName={auth.user.name || "Admin"}
-                onSignOut={auth.signOut}
+                onSignOut={handleSignOut}
                 mobile
                 onClose={() => setMobileMenuOpen(false)}
               />
