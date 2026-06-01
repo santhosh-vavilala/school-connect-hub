@@ -1,13 +1,57 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  BookOpen,
+  GraduationCap,
+  LayoutDashboard,
+  Menu,
+  Plus,
+  School,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-interface AdminDashboardData {
-  students: Array<Record<string, unknown>>;
-  teachers: Array<Record<string, unknown>>;
-  classes: Array<Record<string, unknown>>;
+type AdminSection = "overview" | "students" | "teachers" | "classes";
+type ModalType = "student" | "teacher" | "class" | null;
+
+interface DashboardSummary {
+  students: number;
+  teachers: number;
+  classes: number;
+}
+
+interface TeacherRecord {
+  _id: string;
+  name: string;
+  phone: string;
+  isActive?: boolean;
+}
+
+interface StudentRecord {
+  _id: string;
+  name: string;
+  phone: string;
+  admissionNumber?: string | null;
+  gender?: string | null;
+  dob?: string | null;
+  rollNumber?: number | null;
+  fatherName?: string | null;
+  motherName?: string | null;
+  alternatePhone?: string | null;
+  address?: string | null;
+  classId?: string | null;
+  isActive?: boolean;
+}
+
+interface ClassRecord {
+  _id: string;
+  name: string;
+  section?: string | null;
+  teacherId?: { _id?: string; name?: string; phone?: string } | null;
 }
 
 interface PlatformUser {
@@ -17,6 +61,21 @@ interface PlatformUser {
   phone: string;
   schoolName?: string;
   isActive: boolean;
+}
+
+interface StudentFormState {
+  name: string;
+  phone: string;
+  email: string;
+  admissionNumber: string;
+  gender: string;
+  dob: string;
+  rollNumber: string;
+  fatherName: string;
+  motherName: string;
+  alternatePhone: string;
+  address: string;
+  classId: string;
 }
 
 export const Route = createFileRoute("/admin")({
@@ -29,16 +88,47 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
+const emptyStudentForm: StudentFormState = {
+  name: "",
+  phone: "",
+  email: "",
+  admissionNumber: "",
+  gender: "",
+  dob: "",
+  rollNumber: "",
+  fatherName: "",
+  motherName: "",
+  alternatePhone: "",
+  address: "",
+  classId: "",
+};
+
+const emptyTeacherForm = { name: "", phone: "" };
+const emptyClassForm = { name: "", section: "" };
+
+const adminMenu = [
+  { id: "overview" as const, label: "Dashboard", icon: LayoutDashboard },
+  { id: "students" as const, label: "Students", icon: Users },
+  { id: "teachers" as const, label: "Teachers", icon: UserRound },
+  { id: "classes" as const, label: "Classes", icon: School },
+];
+
 function Admin() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const [studentForm, setStudentForm] = useState({ name: "", phone: "", admissionNumber: "", classId: "" });
-  const [teacherForm, setTeacherForm] = useState({ name: "", phone: "" });
-  const [classForm, setClassForm] = useState({ name: "", section: "" });
-  const [dashboardData, setDashboardData] = useState<AdminDashboardData>({ students: [], teachers: [], classes: [] });
+  const [activeSection, setActiveSection] = useState<AdminSection>("overview");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [modalType, setModalType] = useState<ModalType>(null);
+  const [summary, setSummary] = useState<DashboardSummary>({ students: 0, teachers: 0, classes: 0 });
+  const [students, setStudents] = useState<StudentRecord[]>([]);
+  const [teachers, setTeachers] = useState<TeacherRecord[]>([]);
+  const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
-  const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
-  const [isLoadingPlatformUsers, setIsLoadingPlatformUsers] = useState(false);
+  const [studentForm, setStudentForm] = useState<StudentFormState>(emptyStudentForm);
+  const [teacherForm, setTeacherForm] = useState(emptyTeacherForm);
+  const [classForm, setClassForm] = useState(emptyClassForm);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,34 +147,57 @@ function Admin() {
   const isSuperAdmin = auth.user?.role === "super_admin";
   const schoolId = auth.user?.schoolId ?? null;
 
+  const classOptions = useMemo(
+    () =>
+      classes.map((item) => ({
+        value: item._id,
+        label: `${item.name}${item.section ? ` - ${item.section}` : ""}`,
+      })),
+    [classes]
+  );
+
+  const classMap = useMemo(
+    () =>
+      Object.fromEntries(
+        classes.map((item) => [item._id, `${item.name}${item.section ? ` - ${item.section}` : ""}`])
+      ),
+    [classes]
+  );
+
   useEffect(() => {
     if (!isAdmin || !schoolId) {
       return;
     }
 
-    const loadDashboard = async () => {
-      setIsLoadingDashboard(true);
+    const loadAdminData = async () => {
+      setIsLoading(true);
+      setError(null);
+
       try {
-        const [students, teachers, classes] = await Promise.all([
+        const [summaryResponse, studentsResponse, teachersResponse, classesResponse] = await Promise.all([
+          apiFetch(`/schools/dashboard-summary/${schoolId}`),
           apiFetch(`/students?schoolId=${schoolId}`),
           apiFetch(`/teachers?schoolId=${schoolId}`),
           apiFetch(`/classes?schoolId=${schoolId}`),
         ]);
 
-        setDashboardData({
-          students: Array.isArray(students) ? students : [],
-          teachers: Array.isArray(teachers) ? teachers : [],
-          classes: Array.isArray(classes) ? classes : [],
+        setSummary({
+          students: Number((summaryResponse as any)?.students || 0),
+          teachers: Number((summaryResponse as any)?.teachers || 0),
+          classes: Number((summaryResponse as any)?.classes || 0),
         });
+        setStudents(Array.isArray(studentsResponse) ? (studentsResponse as StudentRecord[]) : []);
+        setTeachers(Array.isArray(teachersResponse) ? (teachersResponse as TeacherRecord[]) : []);
+        setClasses(Array.isArray(classesResponse) ? (classesResponse as ClassRecord[]) : []);
       } catch (err: any) {
         console.error(err);
         setError(err?.message || "Unable to load dashboard data.");
       } finally {
-        setIsLoadingDashboard(false);
+        setIsLoading(false);
       }
     };
 
-    void loadDashboard();
+    void loadAdminData();
   }, [isAdmin, schoolId]);
 
   useEffect(() => {
@@ -93,50 +206,65 @@ function Admin() {
     }
 
     const loadUsers = async () => {
-      setIsLoadingPlatformUsers(true);
+      setIsLoading(true);
+      setError(null);
       try {
         const users = await apiFetch("/auth/users");
-        setPlatformUsers(Array.isArray(users) ? users : []);
+        setPlatformUsers(Array.isArray(users) ? (users as PlatformUser[]) : []);
       } catch (err: any) {
         console.error(err);
         setError(err?.message || "Unable to load platform users.");
       } finally {
-        setIsLoadingPlatformUsers(false);
+        setIsLoading(false);
       }
     };
 
     void loadUsers();
   }, [isSuperAdmin]);
 
-  const reloadDashboard = async () => {
+  const reloadAdminData = async () => {
     if (!isAdmin || !schoolId) {
       return;
     }
 
-    setIsLoadingDashboard(true);
-    try {
-      const [students, teachers, classes] = await Promise.all([
-        apiFetch(`/students?schoolId=${schoolId}`),
-        apiFetch(`/teachers?schoolId=${schoolId}`),
-        apiFetch(`/classes?schoolId=${schoolId}`),
-      ]);
+    const [summaryResponse, studentsResponse, teachersResponse, classesResponse] = await Promise.all([
+      apiFetch(`/schools/dashboard-summary/${schoolId}`),
+      apiFetch(`/students?schoolId=${schoolId}`),
+      apiFetch(`/teachers?schoolId=${schoolId}`),
+      apiFetch(`/classes?schoolId=${schoolId}`),
+    ]);
 
-      setDashboardData({
-        students: Array.isArray(students) ? students : [],
-        teachers: Array.isArray(teachers) ? teachers : [],
-        classes: Array.isArray(classes) ? classes : [],
-      });
-    } catch (err: any) {
-      console.error(err);
-      setError(err?.message || "Unable to refresh dashboard data.");
-    } finally {
-      setIsLoadingDashboard(false);
-    }
+    setSummary({
+      students: Number((summaryResponse as any)?.students || 0),
+      teachers: Number((summaryResponse as any)?.teachers || 0),
+      classes: Number((summaryResponse as any)?.classes || 0),
+    });
+    setStudents(Array.isArray(studentsResponse) ? (studentsResponse as StudentRecord[]) : []);
+    setTeachers(Array.isArray(teachersResponse) ? (teachersResponse as TeacherRecord[]) : []);
+    setClasses(Array.isArray(classesResponse) ? (classesResponse as ClassRecord[]) : []);
+  };
+
+  const closeModal = () => {
+    setModalType(null);
+    setError(null);
+    setStudentForm(emptyStudentForm);
+    setTeacherForm(emptyTeacherForm);
+    setClassForm(emptyClassForm);
+  };
+
+  const openModal = (type: Exclude<ModalType, null>) => {
+    setMessage(null);
+    setError(null);
+    setModalType(type);
+    setMobileMenuOpen(false);
   };
 
   const handleAddStudent = async () => {
-    setMessage(null);
+    if (!schoolId) return;
+
+    setIsSaving(true);
     setError(null);
+    setMessage(null);
 
     try {
       await apiFetch("/students", {
@@ -144,19 +272,37 @@ function Admin() {
         body: JSON.stringify({
           ...studentForm,
           schoolId,
+          phone: studentForm.phone.trim(),
+          alternatePhone: studentForm.alternatePhone.trim(),
+          email: studentForm.email.trim() || null,
+          admissionNumber: studentForm.admissionNumber.trim(),
+          gender: studentForm.gender || null,
+          dob: studentForm.dob || null,
+          rollNumber: studentForm.rollNumber ? Number(studentForm.rollNumber) : null,
+          fatherName: studentForm.fatherName.trim() || null,
+          motherName: studentForm.motherName.trim() || null,
+          address: studentForm.address.trim() || null,
+          classId: studentForm.classId || null,
         }),
       });
+
       setMessage("Student added successfully.");
-      setStudentForm({ name: "", phone: "", admissionNumber: "", classId: "" });
-      await reloadDashboard();
+      await reloadAdminData();
+      closeModal();
+      setActiveSection("students");
     } catch (err: any) {
       setError(err?.message || "Unable to add student.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleAddTeacher = async () => {
-    setMessage(null);
+    if (!schoolId) return;
+
+    setIsSaving(true);
     setError(null);
+    setMessage(null);
 
     try {
       await apiFetch("/teachers", {
@@ -166,17 +312,24 @@ function Admin() {
           schoolId,
         }),
       });
+
       setMessage("Teacher added successfully.");
-      setTeacherForm({ name: "", phone: "" });
-      await reloadDashboard();
+      await reloadAdminData();
+      closeModal();
+      setActiveSection("teachers");
     } catch (err: any) {
       setError(err?.message || "Unable to add teacher.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleAddClass = async () => {
-    setMessage(null);
+    if (!schoolId) return;
+
+    setIsSaving(true);
     setError(null);
+    setMessage(null);
 
     try {
       await apiFetch("/classes", {
@@ -186,15 +339,19 @@ function Admin() {
           schoolId,
         }),
       });
+
       setMessage("Class added successfully.");
-      setClassForm({ name: "", section: "" });
-      await reloadDashboard();
+      await reloadAdminData();
+      closeModal();
+      setActiveSection("classes");
     } catch (err: any) {
       setError(err?.message || "Unable to add class.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  if (auth.isLoading) {
+  if (auth.isLoading || isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12 text-slate-900">
         <div className="rounded-3xl border border-slate-200 bg-white px-8 py-12 text-center shadow-xl shadow-slate-200/60">
@@ -219,17 +376,17 @@ function Admin() {
     );
   }
 
-  return (
-    <main className="min-h-screen bg-slate-50 px-4 py-12 text-slate-900">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm uppercase tracking-[0.35em] text-sky-600">Admin dashboard</p>
-              <h1 className="mt-2 text-3xl font-semibold text-slate-950">Welcome, {auth.user.name || "School Connect user"}</h1>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <span className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700">Role: {auth.user.role}</span>
+  if (isSuperAdmin) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
+        <div className="mx-auto max-w-7xl space-y-8">
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm uppercase tracking-[0.35em] text-sky-600">Super Admin</p>
+                <h1 className="mt-2 text-3xl font-semibold text-slate-950">Platform overview</h1>
+                <p className="mt-2 text-sm text-slate-500">View the full School Connect user base from one place.</p>
+              </div>
               <button
                 onClick={auth.signOut}
                 className="inline-flex items-center justify-center rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-400"
@@ -237,21 +394,12 @@ function Admin() {
                 Sign out
               </button>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {message && (
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{message}</div>
-        )}
-        {error && (
-          <div className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-        )}
+          {error && <InlineBanner tone="error" message={error} />}
 
-        {isSuperAdmin ? (
-          <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60">
-            <h2 className="text-xl font-semibold text-slate-950">Super admin overview</h2>
-            <p className="mt-2 text-slate-500">View platform users and school administration data.</p>
-
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60">
+            <h2 className="text-xl font-semibold text-slate-950">Platform users</h2>
             <div className="mt-6 overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
               <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
                 <thead className="bg-white text-slate-500">
@@ -266,7 +414,7 @@ function Admin() {
                 <tbody className="divide-y divide-slate-200">
                   {platformUsers.map((user) => (
                     <tr key={user._id} className="hover:bg-slate-100/80">
-                      <td className="px-4 py-3">{user.name || "—"}</td>
+                      <td className="px-4 py-3">{user.name || "-"}</td>
                       <td className="px-4 py-3 capitalize">{user.role}</td>
                       <td className="px-4 py-3">{user.phone}</td>
                       <td className="px-4 py-3">{user.schoolName || "Global"}</td>
@@ -277,94 +425,538 @@ function Admin() {
               </table>
             </div>
           </section>
-        ) : (
-          <>
-            <section className="grid gap-4 md:grid-cols-3">
-              <Card label="Students" value={dashboardData.students.length} />
-              <Card label="Teachers" value={dashboardData.teachers.length} />
-              <Card label="Classes" value={dashboardData.classes.length} />
-            </section>
+        </div>
+      </main>
+    );
+  }
 
-            <section className="grid gap-6 xl:grid-cols-3">
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
-                <h2 className="text-xl font-semibold text-slate-950">Add a new class</h2>
-                <form
-                  className="mt-5 space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleAddClass();
-                  }}
-                >
-                  <InputLabel label="Class name" value={classForm.name} onChange={(value) => setClassForm((prev) => ({ ...prev, name: value }))} />
-                  <InputLabel label="Section" value={classForm.section} onChange={(value) => setClassForm((prev) => ({ ...prev, section: value }))} />
-                  <button
-                    type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-3xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
-                  >
-                    Add class
-                  </button>
-                </form>
-              </div>
+  return (
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="flex min-h-screen">
+        <aside className="hidden w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+          <SidebarContent
+            activeSection={activeSection}
+            onNavigate={setActiveSection}
+            userName={auth.user.name || "Admin"}
+            onSignOut={auth.signOut}
+          />
+        </aside>
 
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
-                <h2 className="text-xl font-semibold text-slate-950">Add a teacher</h2>
-                <form
-                  className="mt-5 space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleAddTeacher();
-                  }}
-                >
-                  <InputLabel label="Name" value={teacherForm.name} onChange={(value) => setTeacherForm((prev) => ({ ...prev, name: value }))} />
-                  <InputLabel label="Phone" value={teacherForm.phone} onChange={(value) => setTeacherForm((prev) => ({ ...prev, phone: value }))} />
-                  <button
-                    type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-3xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
-                  >
-                    Add teacher
-                  </button>
-                </form>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
-                <h2 className="text-xl font-semibold text-slate-950">Add a student</h2>
-                <form
-                  className="mt-5 space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleAddStudent();
-                  }}
-                >
-                  <InputLabel label="Name" value={studentForm.name} onChange={(value) => setStudentForm((prev) => ({ ...prev, name: value }))} />
-                  <InputLabel label="Phone" value={studentForm.phone} onChange={(value) => setStudentForm((prev) => ({ ...prev, phone: value }))} />
-                  <InputLabel label="Admission number" value={studentForm.admissionNumber} onChange={(value) => setStudentForm((prev) => ({ ...prev, admissionNumber: value }))} />
-                  <InputLabel label="Class ID" value={studentForm.classId} onChange={(value) => setStudentForm((prev) => ({ ...prev, classId: value }))} />
-                  <button
-                    type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-3xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
-                  >
-                    Add student
-                  </button>
-                </form>
-              </div>
-            </section>
-          </>
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-40 bg-slate-950/30 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+            <aside
+              className="h-full w-72 border-r border-slate-200 bg-white"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <SidebarContent
+                activeSection={activeSection}
+                onNavigate={(section) => {
+                  setActiveSection(section);
+                  setMobileMenuOpen(false);
+                }}
+                userName={auth.user.name || "Admin"}
+                onSignOut={auth.signOut}
+                mobile
+                onClose={() => setMobileMenuOpen(false)}
+              />
+            </aside>
+          </div>
         )}
+
+        <div className="flex-1">
+          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
+            <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-10">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <div>
+                  <p className="text-sm uppercase tracking-[0.3em] text-sky-600">Dashboard</p>
+                  <h1 className="mt-1 text-2xl font-semibold text-slate-950">
+                    Welcome back, {auth.user.name || "Admin"}!
+                  </h1>
+                </div>
+              </div>
+
+              <button
+                onClick={auth.signOut}
+                className="hidden rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-400 sm:inline-flex"
+              >
+                Sign out
+              </button>
+            </div>
+          </header>
+
+          <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+            <div className="space-y-6">
+              {message && <InlineBanner tone="success" message={message} />}
+              {error && <InlineBanner tone="error" message={error} />}
+
+              <section className="grid gap-4 md:grid-cols-3">
+                <StatCard
+                  label="Students"
+                  value={summary.students}
+                  icon={Users}
+                  accent="from-sky-500 to-cyan-400"
+                />
+                <StatCard
+                  label="Teachers"
+                  value={summary.teachers}
+                  icon={GraduationCap}
+                  accent="from-emerald-500 to-teal-400"
+                />
+                <StatCard
+                  label="Classes"
+                  value={summary.classes}
+                  icon={BookOpen}
+                  accent="from-indigo-500 to-blue-500"
+                />
+              </section>
+
+              {activeSection === "overview" && (
+                <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-8">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <h2 className="text-2xl font-semibold text-slate-950">School snapshot</h2>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                        Use the left menu to manage students, teachers, and classes. Each section shows your current records and lets you add new entries from a modal without leaving the page.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <QuickActionButton label="Add student" onClick={() => openModal("student")} />
+                      <QuickActionButton label="Add teacher" onClick={() => openModal("teacher")} />
+                      <QuickActionButton label="Add class" onClick={() => openModal("class")} />
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {activeSection === "students" && (
+                <SectionPanel
+                  title="Students"
+                  description="All student records for your school."
+                  actionLabel="Add student"
+                  onAction={() => openModal("student")}
+                >
+                  <DataTable
+                    columns={["Name", "Admission No.", "Phone", "Class", "Parent", "Status"]}
+                    rows={students.map((student) => [
+                      student.name || "-",
+                      student.admissionNumber || "-",
+                      student.phone || "-",
+                      student.classId ? classMap[student.classId] || student.classId : "-",
+                      student.fatherName || student.motherName || "-",
+                      student.isActive === false ? "Inactive" : "Active",
+                    ])}
+                    emptyMessage="No students found yet."
+                  />
+                </SectionPanel>
+              )}
+
+              {activeSection === "teachers" && (
+                <SectionPanel
+                  title="Teachers"
+                  description="All teacher accounts currently available in the school."
+                  actionLabel="Add teacher"
+                  onAction={() => openModal("teacher")}
+                >
+                  <DataTable
+                    columns={["Name", "Phone", "Status"]}
+                    rows={teachers.map((teacher) => [
+                      teacher.name || "-",
+                      teacher.phone || "-",
+                      teacher.isActive === false ? "Inactive" : "Active",
+                    ])}
+                    emptyMessage="No teachers found yet."
+                  />
+                </SectionPanel>
+              )}
+
+              {activeSection === "classes" && (
+                <SectionPanel
+                  title="Classes"
+                  description="Class list with assigned teachers."
+                  actionLabel="Add class"
+                  onAction={() => openModal("class")}
+                >
+                  <DataTable
+                    columns={["Class", "Section", "Assigned teacher"]}
+                    rows={classes.map((item) => [
+                      item.name || "-",
+                      item.section || "-",
+                      item.teacherId?.name || "Not assigned",
+                    ])}
+                    emptyMessage="No classes found yet."
+                  />
+                </SectionPanel>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {modalType && (
+        <ModalShell
+          title={
+            modalType === "student"
+              ? "Add new student"
+              : modalType === "teacher"
+                ? "Add new teacher"
+                : "Add new class"
+          }
+          onClose={closeModal}
+        >
+          {modalType === "student" && (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField label="Student name" value={studentForm.name} onChange={(value) => setStudentForm((prev) => ({ ...prev, name: value }))} />
+                <TextField label="Phone" value={studentForm.phone} onChange={(value) => setStudentForm((prev) => ({ ...prev, phone: value }))} />
+                <TextField label="Email" value={studentForm.email} onChange={(value) => setStudentForm((prev) => ({ ...prev, email: value }))} />
+                <TextField label="Admission number" value={studentForm.admissionNumber} onChange={(value) => setStudentForm((prev) => ({ ...prev, admissionNumber: value }))} />
+                <SelectField
+                  label="Gender"
+                  value={studentForm.gender}
+                  onChange={(value) => setStudentForm((prev) => ({ ...prev, gender: value }))}
+                  options={[
+                    { value: "", label: "Select gender" },
+                    { value: "male", label: "Male" },
+                    { value: "female", label: "Female" },
+                    { value: "other", label: "Other" },
+                  ]}
+                />
+                <TextField label="Date of birth" type="date" value={studentForm.dob} onChange={(value) => setStudentForm((prev) => ({ ...prev, dob: value }))} />
+                <TextField label="Roll number" value={studentForm.rollNumber} onChange={(value) => setStudentForm((prev) => ({ ...prev, rollNumber: value }))} />
+                <SelectField
+                  label="Class"
+                  value={studentForm.classId}
+                  onChange={(value) => setStudentForm((prev) => ({ ...prev, classId: value }))}
+                  options={[{ value: "", label: "Select class" }, ...classOptions]}
+                />
+                <TextField label="Father name" value={studentForm.fatherName} onChange={(value) => setStudentForm((prev) => ({ ...prev, fatherName: value }))} />
+                <TextField label="Mother name" value={studentForm.motherName} onChange={(value) => setStudentForm((prev) => ({ ...prev, motherName: value }))} />
+                <TextField label="Alternate phone" value={studentForm.alternatePhone} onChange={(value) => setStudentForm((prev) => ({ ...prev, alternatePhone: value }))} />
+              </div>
+              <TextAreaField label="Address" value={studentForm.address} onChange={(value) => setStudentForm((prev) => ({ ...prev, address: value }))} />
+              <ModalActions onClose={closeModal} onSubmit={handleAddStudent} isSaving={isSaving} />
+            </div>
+          )}
+
+          {modalType === "teacher" && (
+            <div className="space-y-4">
+              <TextField label="Teacher name" value={teacherForm.name} onChange={(value) => setTeacherForm((prev) => ({ ...prev, name: value }))} />
+              <TextField label="Phone" value={teacherForm.phone} onChange={(value) => setTeacherForm((prev) => ({ ...prev, phone: value }))} />
+              <ModalActions onClose={closeModal} onSubmit={handleAddTeacher} isSaving={isSaving} />
+            </div>
+          )}
+
+          {modalType === "class" && (
+            <div className="space-y-4">
+              <TextField label="Class name" value={classForm.name} onChange={(value) => setClassForm((prev) => ({ ...prev, name: value }))} />
+              <TextField label="Section" value={classForm.section} onChange={(value) => setClassForm((prev) => ({ ...prev, section: value }))} />
+              <ModalActions onClose={closeModal} onSubmit={handleAddClass} isSaving={isSaving} />
+            </div>
+          )}
+        </ModalShell>
+      )}
     </main>
   );
 }
 
-function Card({ label, value }: { label: string; value: number }) {
+function SidebarContent({
+  activeSection,
+  onNavigate,
+  userName,
+  onSignOut,
+  mobile = false,
+  onClose,
+}: {
+  activeSection: AdminSection;
+  onNavigate: (section: AdminSection) => void;
+  userName: string;
+  onSignOut: () => Promise<void>;
+  mobile?: boolean;
+  onClose?: () => void;
+}) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
-      <p className="text-sm uppercase tracking-[0.35em] text-slate-500">{label}</p>
-      <p className="mt-4 text-4xl font-semibold text-slate-950">{value}</p>
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-lg shadow-sky-200">
+            <School className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-950">School Connect</p>
+            <p className="text-xs text-slate-500">Admin workspace</p>
+          </div>
+        </div>
+        {mobile && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 px-4 py-5">
+        <p className="px-3 text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Menu</p>
+        <nav className="mt-4 space-y-2">
+          {adminMenu.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onNavigate(id)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition",
+                activeSection === id
+                  ? "bg-sky-50 text-sky-700 shadow-sm ring-1 ring-sky-100"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+              )}
+            >
+              <Icon className="h-5 w-5" />
+              {label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      <div className="border-t border-slate-200 p-4">
+        <div className="rounded-3xl bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-950">{userName}</p>
+          <p className="mt-1 text-xs text-slate-500">School administrator</p>
+          <button
+            onClick={onSignOut}
+            className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function InputLabel({
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  accent,
+}: {
+  label: string;
+  value: number;
+  icon: typeof Users;
+  accent: string;
+}) {
+  return (
+    <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm uppercase tracking-[0.28em] text-slate-400">{label}</p>
+          <p className="mt-4 text-4xl font-semibold text-slate-950">{value}</p>
+        </div>
+        <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br text-white", accent)}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+    >
+      {label}
+    </button>
+  );
+}
+
+function SectionPanel({
+  title,
+  description,
+  actionLabel,
+  onAction,
+  children,
+}: {
+  title: string;
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold text-slate-950">{title}</h2>
+          <p className="mt-2 text-sm text-slate-500">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onAction}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
+        >
+          <Plus className="h-4 w-4" />
+          {actionLabel}
+        </button>
+      </div>
+      <div className="mt-6">{children}</div>
+    </section>
+  );
+}
+
+function DataTable({
+  columns,
+  rows,
+  emptyMessage,
+}: {
+  columns: string[];
+  rows: string[][];
+  emptyMessage: string;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-14 text-center text-sm text-slate-500">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
+      <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
+        <thead className="bg-white text-slate-500">
+          <tr>
+            {columns.map((column) => (
+              <th key={column} className="px-4 py-3 font-medium">
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200">
+          {rows.map((row, index) => (
+            <tr key={`${row[0]}-${index}`} className="hover:bg-slate-100/80">
+              {row.map((cell, cellIndex) => (
+                <td key={`${cell}-${cellIndex}`} className="px-4 py-3">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function InlineBanner({ tone, message }: { tone: "success" | "error"; message: string }) {
+  return (
+    <div
+      className={cn(
+        "rounded-3xl border p-4 text-sm",
+        tone === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-red-200 bg-red-50 text-red-700"
+      )}
+    >
+      {message}
+    </div>
+  );
+}
+
+function ModalShell({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-300/50 sm:p-8">
+        <div className="flex items-center justify-between">
+          <h3 className="text-2xl font-semibold text-slate-950">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function ModalActions({
+  onClose,
+  onSubmit,
+  isSaving,
+}: {
+  onClose: () => void;
+  onSubmit: () => void;
+  isSaving: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:justify-end">
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        onClick={onSubmit}
+        disabled={isSaving}
+        className="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isSaving ? "Saving..." : "Save"}
+      </button>
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <label className="block text-sm text-slate-600">
+      <span className="mb-2 block font-medium text-slate-700">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+      />
+    </label>
+  );
+}
+
+function TextAreaField({
   label,
   value,
   onChange,
@@ -375,14 +967,42 @@ function InputLabel({
 }) {
   return (
     <label className="block text-sm text-slate-600">
-      <span className="mb-2 block text-sm font-medium text-slate-700">{label}</span>
-      <input
+      <span className="mb-2 block font-medium text-slate-700">{label}</span>
+      <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={cn(
-          "w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-        )}
+        rows={4}
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
       />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <label className="block text-sm text-slate-600">
+      <span className="mb-2 block font-medium text-slate-700">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+      >
+        {options.map((option) => (
+          <option key={`${option.value}-${option.label}`} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
