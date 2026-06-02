@@ -290,6 +290,19 @@ function Admin() {
       ),
     [classes]
   );
+  const classStudentCountMap = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    students.forEach((student) => {
+      if (!student.classId) {
+        return;
+      }
+
+      counts[student.classId] = (counts[student.classId] || 0) + 1;
+    });
+
+    return counts;
+  }, [students]);
   const filteredStudents = useMemo(() => {
     const query = studentSearch.trim().toLowerCase();
 
@@ -1263,11 +1276,12 @@ function Admin() {
                   onAction={() => openModal("class")}
                 >
                   <DataTable
-                    columns={["Class ID", "Class", "Section", "Assigned teacher"]}
+                    columns={["Class ID", "Class", "Section", "Students", "Assigned teacher"]}
                     rows={classes.map((item) => [
                       item._id || "-",
                       item.name || "-",
                       item.section || "-",
+                      String(classStudentCountMap[item._id] || 0),
                       item.teacherId?.name || "Not assigned",
                     ])}
                     emptyMessage="No classes found yet."
