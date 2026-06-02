@@ -590,11 +590,11 @@ function Admin() {
     setFeeItems(
       Array.isArray(ledger.feeItems) && ledger.feeItems.length > 0
         ? ledger.feeItems.map((item) => ({
-            title: item.title || "",
-            amount: String(item.amount ?? ""),
-            dueDate: item.dueDate ? String(item.dueDate).split("T")[0] : "",
-            notes: item.notes || "",
-          }))
+          title: item.title || "",
+          amount: String(item.amount ?? ""),
+          dueDate: item.dueDate ? String(item.dueDate).split("T")[0] : "",
+          notes: item.notes || "",
+        }))
         : [createEmptyFeeItem()]
     );
     setFeeConcessionAmount(ledger.concessionAmount ? String(ledger.concessionAmount) : "");
@@ -617,11 +617,11 @@ function Admin() {
     setTemplateFeeItems(
       Array.isArray(template.feeItems) && template.feeItems.length > 0
         ? template.feeItems.map((item) => ({
-            title: item.title || "",
-            amount: String(item.amount ?? ""),
-            dueDate: item.dueDate ? String(item.dueDate).split("T")[0] : "",
-            notes: item.notes || "",
-          }))
+          title: item.title || "",
+          amount: String(item.amount ?? ""),
+          dueDate: item.dueDate ? String(item.dueDate).split("T")[0] : "",
+          notes: item.notes || "",
+        }))
         : [createEmptyFeeItem()]
     );
     setTemplateConcessionAmount(template.concessionAmount ? String(template.concessionAmount) : "");
@@ -1280,7 +1280,7 @@ function Admin() {
                             onRemove={
                               templateFeeItems.length > 1
                                 ? () =>
-                                    setTemplateFeeItems((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                                  setTemplateFeeItems((current) => current.filter((_, itemIndex) => itemIndex !== index))
                                 : undefined
                             }
                           />
@@ -2151,7 +2151,7 @@ function SelectField({
     <label className="block text-sm text-slate-600">
       <span className="mb-2 block font-medium text-slate-700">{label}</span>
       <UiSelect value={normalizedValue} onValueChange={(nextValue) => onChange(nextValue === "__empty__" ? "" : nextValue)}>
-        <UiSelectTrigger className="h-auto w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 pr-8 text-sm text-slate-900 shadow-none ring-0 ring-offset-0 focus:ring-2 focus:ring-sky-500/20 data-[placeholder]:text-slate-400 [&>svg]:mr-0 [&>svg]:text-slate-400">
+        <UiSelectTrigger className="h-auto w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 pr-5 text-sm text-slate-900 shadow-none ring-0 ring-offset-0 focus:ring-2 focus:ring-sky-500/20 data-[placeholder]:text-slate-400 [&>svg]:mr-[-2px] [&>svg]:text-slate-400">
           <UiSelectValue placeholder={selectedOptionLabel} />
         </UiSelectTrigger>
         <UiSelectContent className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/80">
