@@ -17,6 +17,13 @@ import {
   Users,
   X,
 } from "lucide-react";
+import {
+  Select as UiSelect,
+  SelectContent as UiSelectContent,
+  SelectItem as UiSelectItem,
+  SelectTrigger as UiSelectTrigger,
+  SelectValue as UiSelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -2137,20 +2144,31 @@ function SelectField({
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
 }) {
+  const normalizedValue = value || "__empty__";
+  const selectedOptionLabel = options.find((option) => option.value === value)?.label || "Select an option";
+
   return (
     <label className="block text-sm text-slate-600">
       <span className="mb-2 block font-medium text-slate-700">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-      >
-        {options.map((option) => (
-          <option key={`${option.value}-${option.label}`} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <UiSelect value={normalizedValue} onValueChange={(nextValue) => onChange(nextValue === "__empty__" ? "" : nextValue)}>
+        <UiSelectTrigger className="h-auto w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 pr-8 text-sm text-slate-900 shadow-none ring-0 ring-offset-0 focus:ring-2 focus:ring-sky-500/20 data-[placeholder]:text-slate-400 [&>svg]:mr-0 [&>svg]:text-slate-400">
+          <UiSelectValue placeholder={selectedOptionLabel} />
+        </UiSelectTrigger>
+        <UiSelectContent className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/80">
+          {options.map((option, index) => (
+            <UiSelectItem
+              key={`${option.value}-${option.label}`}
+              value={option.value || "__empty__"}
+              className={cn(
+                "rounded-xl px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:bg-sky-50 focus:text-sky-700 data-[state=checked]:bg-slate-100 data-[state=checked]:font-medium data-[state=checked]:text-slate-950",
+                index === 0 && option.value === "" ? "text-slate-400" : ""
+              )}
+            >
+              {option.label}
+            </UiSelectItem>
+          ))}
+        </UiSelectContent>
+      </UiSelect>
     </label>
   );
 }
