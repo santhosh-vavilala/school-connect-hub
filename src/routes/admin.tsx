@@ -1723,7 +1723,7 @@ function SidebarContent({
                       className={cn(
                         "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm transition",
                         activeFeesSubSection === item.id
-                          ? "bg-slate-100 font-semibold text-slate-950"
+                          ? "bg-slate-50 font-semibold text-slate-950"
                           : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                       )}
                     >
