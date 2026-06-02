@@ -50,6 +50,7 @@ interface TeacherRecord {
   _id: string;
   name: string;
   phone: string;
+  specialization?: string | null;
   isActive?: boolean;
 }
 
@@ -181,7 +182,7 @@ const emptyStudentForm: StudentFormState = {
   classId: "",
 };
 
-const emptyTeacherForm = { name: "", phone: "" };
+const emptyTeacherForm = { name: "", phone: "", specialization: "" };
 const emptyClassForm = { name: "", section: "" };
 const STUDENTS_PAGE_SIZE = 10;
 const createEmptyFeeItem = (): FeeItemFormState => ({
@@ -1338,10 +1339,11 @@ function Admin() {
                   onAction={() => openModal("teacher")}
                 >
                   <DataTable
-                    columns={["Name", "Phone", "Status"]}
+                    columns={["Name", "Phone", "Specialization", "Status"]}
                     rows={teachers.map((teacher) => [
                       teacher.name || "-",
                       teacher.phone || "-",
+                      teacher.specialization || "-",
                       teacher.isActive === false ? "Inactive" : "Active",
                     ])}
                     emptyMessage="No teachers found yet."
@@ -1814,6 +1816,11 @@ function Admin() {
             <div className="space-y-4">
               <TextField label="Teacher name" value={teacherForm.name} onChange={(value) => setTeacherForm((prev) => ({ ...prev, name: value }))} />
               <TextField label="Phone" value={teacherForm.phone} onChange={(value) => setTeacherForm((prev) => ({ ...prev, phone: value }))} />
+              <TextField
+                label="Specialization"
+                value={teacherForm.specialization}
+                onChange={(value) => setTeacherForm((prev) => ({ ...prev, specialization: value }))}
+              />
             </div>
           )}
 
