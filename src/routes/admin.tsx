@@ -57,6 +57,7 @@ interface StudentRecord {
   _id: string;
   name: string;
   phone: string;
+  email?: string | null;
   admissionNumber?: string | null;
   gender?: string | null;
   dob?: string | null;
@@ -220,6 +221,7 @@ function Admin() {
   const [feeLedgers, setFeeLedgers] = useState<FeeLedgerRecord[]>([]);
   const [feeTemplates, setFeeTemplates] = useState<FeeTemplateRecord[]>([]);
   const [studentForm, setStudentForm] = useState<StudentFormState>(emptyStudentForm);
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [teacherForm, setTeacherForm] = useState(emptyTeacherForm);
   const [classForm, setClassForm] = useState(emptyClassForm);
   const [studentSearch, setStudentSearch] = useState("");
@@ -491,6 +493,7 @@ function Admin() {
   const closeModal = () => {
     setModalType(null);
     setError(null);
+    setEditingStudentId(null);
     setStudentForm(emptyStudentForm);
     setTeacherForm(emptyTeacherForm);
     setClassForm(emptyClassForm);
@@ -499,7 +502,35 @@ function Admin() {
   const openModal = (type: Exclude<ModalType, null>) => {
     setMessage(null);
     setError(null);
+    if (type === "student") {
+      setEditingStudentId(null);
+      setStudentForm(emptyStudentForm);
+    } else {
+      setStudentForm(emptyStudentForm);
+    }
     setModalType(type);
+    setMobileMenuOpen(false);
+  };
+
+  const openEditStudentModal = (student: StudentRecord) => {
+    setMessage(null);
+    setError(null);
+    setEditingStudentId(student._id);
+    setStudentForm({
+      name: student.name || "",
+      phone: student.phone || "",
+      email: student.email || "",
+      admissionNumber: student.admissionNumber || "",
+      gender: student.gender || "",
+      dob: student.dob ? String(student.dob).split("T")[0] : "",
+      rollNumber: student.rollNumber ? String(student.rollNumber) : "",
+      fatherName: student.fatherName || "",
+      motherName: student.motherName || "",
+      alternatePhone: student.alternatePhone || "",
+      address: student.address || "",
+      classId: student.classId || "",
+    });
+    setModalType("student");
     setMobileMenuOpen(false);
   };
 
@@ -511,8 +542,8 @@ function Admin() {
     setMessage(null);
 
     try {
-      await apiFetch("/students", {
-        method: "POST",
+      await apiFetch(editingStudentId ? `/students/${editingStudentId}` : "/students", {
+        method: editingStudentId ? "PUT" : "POST",
         body: JSON.stringify({
           ...studentForm,
           schoolId,
@@ -530,12 +561,12 @@ function Admin() {
         }),
       });
 
-      setMessage("Student added successfully.");
+      setMessage(editingStudentId ? "Student updated successfully." : "Student added successfully.");
       await reloadAdminData();
       closeModal();
       setActiveSection("students");
     } catch (err: any) {
-      setError(err?.message || "Unable to add student.");
+      setError(err?.message || (editingStudentId ? "Unable to update student." : "Unable to add student."));
     } finally {
       setIsSaving(false);
     }
@@ -1234,8 +1265,8 @@ function Admin() {
                       </div>
                     </div>
 
-                    <DataTable
-                      columns={["Name", "Admission No.", "Phone", "Class", "Parent", "Status"]}
+                    <ActionTable
+                      columns={["Name", "Admission No.", "Phone", "Class", "Parent", "Status", "Actions"]}
                       rows={paginatedStudents.map((student) => [
                         student.name || "-",
                         student.admissionNumber || "-",
@@ -1243,6 +1274,14 @@ function Admin() {
                         student.classId ? classMap[student.classId] || student.classId : "-",
                         student.fatherName || student.motherName || "-",
                         student.isActive === false ? "Inactive" : "Active",
+                        <button
+                          key={`${student._id}-edit`}
+                          type="button"
+                          onClick={() => openEditStudentModal(student)}
+                          className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                        >
+                          Edit
+                        </button>,
                       ])}
                       emptyMessage={studentSearch.trim() ? "No students match your search." : "No students found yet."}
                     />
@@ -1708,7 +1747,9 @@ function Admin() {
         <ModalShell
           title={
             modalType === "student"
-              ? "Add new student"
+              ? editingStudentId
+                ? "Edit student"
+                : "Add new student"
               : modalType === "teacher"
                 ? "Add new teacher"
                 : "Add new class"
@@ -1724,6 +1765,13 @@ function Admin() {
                     : handleAddClass
               }
               isSaving={isSaving}
+              submitLabel={
+                modalType === "student"
+                  ? editingStudentId
+                    ? "Update student"
+                    : "Save"
+                  : "Save"
+              }
             />
           }
           onClose={closeModal}
