@@ -1,6 +1,6 @@
 import * as React from "react";
-import { getCachedAccessToken, getSupabaseClient, setCachedAccessToken } from "@/lib/supabase";
-import { apiFetch, publicApiFetch } from "@/lib/api";
+import { getSupabaseClient, setCachedAccessToken } from "@/lib/supabase";
+import { publicApiFetch } from "@/lib/api";
 
 export type AuthRole =
   | "super_admin"
@@ -39,20 +39,11 @@ function normalizePhone(phone?: string | null) {
 
 async function resolveUser(phone: string): Promise<AuthUser | null> {
   const normalizedPhone = normalizePhone(phone);
-  console.log("[auth] resolveUser called", {
-    rawPhone: phone,
-    normalizedPhone,
-  });
   if (!normalizedPhone) {
-    console.warn("[auth] resolveUser aborted because phone could not be normalized");
     return null;
   }
 
-  console.log("[auth] resolving app user via backend", {
-    endpoint: `/auth/user?phone=${normalizedPhone}`,
-  });
   const payload = (await publicApiFetch(`/auth/user?phone=${normalizedPhone}`)) as any;
-  console.log("[auth] resolveUser backend payload", payload);
 
   return {
     role: payload.role,
@@ -159,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(resolved);
           }
         } catch (error) {
-          console.error("[auth] onAuthStateChange resolveUser failed", error);
+          console.error(error);
         }
       }, 0);
     });
@@ -211,35 +202,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Please enter a valid 6-digit OTP.");
       }
 
-      console.log("[auth] verifyOtp starting", {
-        otpRequestedFor,
-        codeLength: trimmedCode.length,
-      });
       const { data, error } = await supabase.auth.verifyOtp({
         phone: otpRequestedFor,
         token: trimmedCode,
         type: "sms",
       });
       setCachedAccessToken(data.session?.access_token || null);
-      console.log("[auth] verifyOtp supabase response", {
-        hasError: Boolean(error),
-        hasSession: Boolean(data.session),
-        userPhone: data.user?.phone || null,
-      });
 
       if (error) {
-        console.error("[auth] verifyOtp supabase error", error);
         throw new Error(getAuthErrorMessage(error, "verifyOtp"));
       }
 
       const phone = data.user?.phone || otpRequestedFor;
-      console.log("[auth] verifyOtp resolving application user", { phone });
       const resolved = await resolveUser(phone);
       if (!resolved) {
         await supabase.auth.signOut();
         throw new Error("User not found. This phone number is not registered in School Connect.");
       }
-      console.log("[auth] verifyOtp resolved application user", resolved);
       if (!resolved.isActive) {
         await supabase.auth.signOut();
         throw new Error("Your account has been disabled. Please contact the school.");

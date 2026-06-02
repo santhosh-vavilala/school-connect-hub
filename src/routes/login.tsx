@@ -74,7 +74,6 @@ function Login() {
 
   const handleVerifyOtp = async () => {
     if (isVerifyingOtp) {
-      console.warn("[login] verify button clicked while verification already in progress");
       return;
     }
 
@@ -83,16 +82,9 @@ function Login() {
     setIsVerifyingOtp(true);
 
     try {
-      console.log("[login] handleVerifyOtp called", {
-        phone,
-        codeLength: code.length,
-        otpRequestedFor: auth.otpRequestedFor,
-      });
       await auth.verifyOtp(code);
-      console.log("[login] auth.verifyOtp resolved successfully, navigating to /admin");
       navigate({ to: "/admin" });
     } catch (error: any) {
-      console.error("[login] auth.verifyOtp failed", error);
       setError(error?.message || "Unable to verify OTP. Please try again.");
     } finally {
       setIsVerifyingOtp(false);
