@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 
 type AdminSection = "overview" | "students" | "teachers" | "classes" | "fees";
 type ModalType = "student" | "teacher" | "class" | null;
-type FeesSubSection = "template-list" | "template-create" | "custom-list" | "custom-create";
+type FeesSubSection = "template-list" | "template-create" | "custom-list" | "custom-create" | "student-overview";
 
 interface DashboardSummary {
   students: number;
@@ -199,6 +199,7 @@ const adminMenu = [
 ];
 
 const feesSubMenu = [
+  { id: "student-overview" as const, label: "Student fee overview", dotClassName: "bg-sky-400" },
   { id: "template-list" as const, label: "Template list", dotClassName: "bg-violet-500" },
   { id: "template-create" as const, label: "Create template", dotClassName: "bg-fuchsia-400" },
   { id: "custom-list" as const, label: "Custom template list", dotClassName: "bg-amber-300" },
@@ -342,6 +343,47 @@ function Admin() {
       ),
     [feeLedgers, customTemplateStudentFilter]
   );
+  const feeOverviewRows = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return feeLedgers.map((ledger) => {
+      const datedItems = (ledger.feeItems || [])
+        .filter((item) => item.dueDate)
+        .map((item) => ({
+          ...item,
+          dueDateValue: item.dueDate ? String(item.dueDate).split("T")[0] : "",
+        }))
+        .filter((item) => item.dueDateValue);
+
+      const sortedItems = datedItems.sort((a, b) => a.dueDateValue.localeCompare(b.dueDateValue));
+      const nextDueItem = sortedItems.find((item) => {
+        const dueDate = new Date(item.dueDateValue);
+        dueDate.setHours(0, 0, 0, 0);
+        return dueDate >= today;
+      });
+      const lastDueItem = sortedItems.length > 0 ? sortedItems[sortedItems.length - 1] : null;
+      const effectiveDueItem = nextDueItem || lastDueItem;
+      const effectiveDueDate = effectiveDueItem?.dueDateValue || "";
+      const isOverdue =
+        Boolean(effectiveDueDate) &&
+        (ledger.pendingAmount || 0) > 0 &&
+        new Date(effectiveDueDate).getTime() < today.getTime();
+
+      return {
+        id: ledger._id,
+        studentName: ledger.childName || "Student",
+        classLabel: `${ledger.className || "-"}${ledger.section ? ` - ${ledger.section}` : ""}`,
+        academicYear: ledger.academicYear || "-",
+        totalAmount: ledger.netAmount || 0,
+        paidAmount: ledger.paidAmount || 0,
+        pendingAmount: ledger.pendingAmount || 0,
+        nextDueDate: effectiveDueDate || "-",
+        dueStatus: isOverdue ? "Overdue" : (ledger.pendingAmount || 0) > 0 ? "Upcoming" : "Cleared",
+        crossedDueDate: isOverdue ? "Yes" : "No",
+      };
+    });
+  }, [feeLedgers]);
 
   const hasInvalidImportRows = useMemo(
     () => studentImportRows.some((row) => row.errors.length > 0),
@@ -1294,7 +1336,60 @@ function Admin() {
                   title="Fees"
                   description="Manage class fee templates and student-specific custom templates from dedicated submenu screens."
                 >
-                  {activeFeesSubSection === "template-list" ? (
+                  {activeFeesSubSection === "student-overview" ? (
+                    <div className="space-y-6">
+                      <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+                        Principal view of all student fee ledgers, including total fees, amount paid, pending amount,
+                        upcoming due date, and overdue status.
+                      </div>
+
+                      <ActionTable
+                        columns={[
+                          "Student",
+                          "Class",
+                          "Academic year",
+                          "Total fee",
+                          "Paid",
+                          "Pending",
+                          "Due date",
+                          "Due status",
+                          "Crossed due date",
+                        ]}
+                        rows={feeOverviewRows.map((row) => [
+                          row.studentName,
+                          row.classLabel,
+                          row.academicYear,
+                          `Rs. ${row.totalAmount}`,
+                          `Rs. ${row.paidAmount}`,
+                          `Rs. ${row.pendingAmount}`,
+                          row.nextDueDate,
+                          <span
+                            key={`${row.id}-status`}
+                            className={cn(
+                              "inline-flex rounded-full px-3 py-1 text-xs font-semibold",
+                              row.dueStatus === "Overdue"
+                                ? "bg-red-50 text-red-700"
+                                : row.dueStatus === "Upcoming"
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-emerald-50 text-emerald-700"
+                            )}
+                          >
+                            {row.dueStatus}
+                          </span>,
+                          <span
+                            key={`${row.id}-crossed`}
+                            className={cn(
+                              "inline-flex rounded-full px-3 py-1 text-xs font-semibold",
+                              row.crossedDueDate === "Yes" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-700"
+                            )}
+                          >
+                            {row.crossedDueDate}
+                          </span>,
+                        ])}
+                        emptyMessage="No student fee ledgers found yet."
+                      />
+                    </div>
+                  ) : activeFeesSubSection === "template-list" ? (
                     <div className="space-y-6">
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_auto] lg:items-end">
                         <SelectField
