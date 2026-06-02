@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 type AdminSection = "overview" | "students" | "teachers" | "classes" | "fees";
 type ModalType = "student" | "teacher" | "class" | null;
+type FeesSubSection = "template-list" | "template-create" | "custom-list" | "custom-create";
 
 interface DashboardSummary {
   students: number;
@@ -181,6 +182,13 @@ const adminMenu = [
   { id: "fees" as const, label: "Fees", icon: IndianRupee },
 ];
 
+const feesSubMenu = [
+  { id: "template-list" as const, label: "Template list", dotClassName: "bg-violet-500" },
+  { id: "template-create" as const, label: "Create template", dotClassName: "bg-fuchsia-400" },
+  { id: "custom-list" as const, label: "Custom template list", dotClassName: "bg-amber-300" },
+  { id: "custom-create" as const, label: "Create custom template", dotClassName: "bg-emerald-400" },
+];
+
 function Admin() {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -197,7 +205,9 @@ function Admin() {
   const [studentForm, setStudentForm] = useState<StudentFormState>(emptyStudentForm);
   const [teacherForm, setTeacherForm] = useState(emptyTeacherForm);
   const [classForm, setClassForm] = useState(emptyClassForm);
-  const [feesView, setFeesView] = useState<"template" | "student">("template");
+  const [activeFeesSubSection, setActiveFeesSubSection] = useState<FeesSubSection>("template-list");
+  const [templateListClassFilter, setTemplateListClassFilter] = useState("");
+  const [customTemplateStudentFilter, setCustomTemplateStudentFilter] = useState("");
   const [selectedFeeClassId, setSelectedFeeClassId] = useState("");
   const [selectedFeeStudentId, setSelectedFeeStudentId] = useState("");
   const [editingFeeLedgerId, setEditingFeeLedgerId] = useState<string | null>(null);
@@ -262,13 +272,19 @@ function Admin() {
       ),
     [classes]
   );
-  const selectedFeeStudentLedgers = useMemo(
-    () => feeLedgers.filter((ledger) => String(ledger.childId) === String(selectedFeeStudentId || "")),
-    [feeLedgers, selectedFeeStudentId]
+  const filteredFeeTemplates = useMemo(
+    () =>
+      feeTemplates.filter((template) =>
+        templateListClassFilter ? String(template.classId) === String(templateListClassFilter) : true
+      ),
+    [feeTemplates, templateListClassFilter]
   );
-  const selectedClassTemplates = useMemo(
-    () => feeTemplates.filter((template) => String(template.classId) === String(selectedFeeClassId || "")),
-    [feeTemplates, selectedFeeClassId]
+  const filteredFeeLedgers = useMemo(
+    () =>
+      feeLedgers.filter((ledger) =>
+        customTemplateStudentFilter ? String(ledger.childId) === String(customTemplateStudentFilter) : true
+      ),
+    [feeLedgers, customTemplateStudentFilter]
   );
 
   const hasInvalidImportRows = useMemo(
@@ -526,6 +542,7 @@ function Admin() {
 
   const resetFeeLedgerForm = () => {
     setEditingFeeLedgerId(null);
+    setSelectedFeeStudentId("");
     setFeeAcademicYear("2026-2027");
     setFeeItems([createEmptyFeeItem()]);
     setFeeConcessionAmount("");
@@ -540,6 +557,7 @@ function Admin() {
 
   const resetFeeTemplateForm = () => {
     setEditingFeeTemplateId(null);
+    setSelectedFeeClassId("");
     setTemplateTitle("");
     setTemplateAcademicYear("2026-2027");
     setTemplateFeeItems([createEmptyFeeItem()]);
@@ -604,6 +622,24 @@ function Admin() {
     setTemplateNotes(template.notes || "");
     setMessage(null);
     setError(null);
+  };
+
+  const openCreateFeeTemplate = (template?: FeeTemplateRecord) => {
+    if (template) {
+      loadFeeTemplateIntoForm(template);
+    } else {
+      resetFeeTemplateForm();
+    }
+    setActiveFeesSubSection("template-create");
+  };
+
+  const openCreateCustomTemplate = (ledger?: FeeLedgerRecord) => {
+    if (ledger) {
+      loadFeeLedgerIntoForm(ledger);
+    } else {
+      resetFeeLedgerForm();
+    }
+    setActiveFeesSubSection("custom-create");
   };
 
   const saveFeeTemplate = async () => {
@@ -951,6 +987,8 @@ function Admin() {
           <SidebarContent
             activeSection={activeSection}
             onNavigate={setActiveSection}
+            activeFeesSubSection={activeFeesSubSection}
+            onNavigateFeesSubSection={setActiveFeesSubSection}
             userName={auth.user.name || "Admin"}
             onSignOut={handleSignOut}
           />
@@ -966,6 +1004,12 @@ function Admin() {
                 activeSection={activeSection}
                 onNavigate={(section) => {
                   setActiveSection(section);
+                  setMobileMenuOpen(false);
+                }}
+                activeFeesSubSection={activeFeesSubSection}
+                onNavigateFeesSubSection={(subSection) => {
+                  setActiveSection("fees");
+                  setActiveFeesSubSection(subSection);
                   setMobileMenuOpen(false);
                 }}
                 userName={auth.user.name || "Admin"}
@@ -1127,41 +1171,56 @@ function Admin() {
               {activeSection === "fees" && (
                 <SectionPanel
                   title="Fees"
-                  description="Create class fee templates, assign them in bulk, and manage student-specific fee ledgers."
-                  actionLabel={feesView === "template" ? "Save template" : "Save ledger"}
-                  onAction={() => {
-                    void (feesView === "template" ? saveFeeTemplate() : saveFeeLedger());
-                  }}
-                  actions={
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => setFeesView("template")}
-                        className={cn(
-                          "inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                          feesView === "template"
-                            ? "bg-slate-950 text-white"
-                            : "border border-slate-200 bg-white text-slate-700"
-                        )}
-                      >
-                        Fee templates
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFeesView("student")}
-                        className={cn(
-                          "inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                          feesView === "student"
-                            ? "bg-slate-950 text-white"
-                            : "border border-slate-200 bg-white text-slate-700"
-                        )}
-                      >
-                        Student ledger
-                      </button>
-                    </div>
-                  }
+                  description="Manage class fee templates and student-specific custom templates from dedicated submenu screens."
                 >
-                  {feesView === "template" ? (
+                  {activeFeesSubSection === "template-list" ? (
+                    <div className="space-y-6">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_auto] lg:items-end">
+                        <SelectField
+                          label="Filter by class"
+                          value={templateListClassFilter}
+                          onChange={setTemplateListClassFilter}
+                          options={[
+                            { value: "", label: "All classes" },
+                            ...classes.map((item) => ({
+                              value: item._id,
+                              label: `${item.name}${item.section ? ` - ${item.section}` : ""}`,
+                            })),
+                          ]}
+                        />
+                        <div className="flex justify-start lg:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openCreateFeeTemplate()}
+                            className="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
+                          >
+                            Create template
+                          </button>
+                        </div>
+                      </div>
+
+                      <ActionTable
+                        columns={["Template", "Class", "Academic year", "Items", "Concession", "Late fee", "Actions"]}
+                        rows={filteredFeeTemplates.map((template) => [
+                          template.title || "-",
+                          `${template.className || "Class"}${template.section ? ` - ${template.section}` : ""}`,
+                          template.academicYear || "-",
+                          String(template.feeItems?.length || 0),
+                          `Rs. ${template.concessionAmount || 0}`,
+                          `Rs. ${template.lateFeeAmount || 0}`,
+                          <button
+                            key={`${template._id}-edit`}
+                            type="button"
+                            onClick={() => openCreateFeeTemplate(template)}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                          >
+                            Edit
+                          </button>,
+                        ])}
+                        emptyMessage="No fee templates found for the selected filter."
+                      />
+                    </div>
+                  ) : activeFeesSubSection === "template-create" ? (
                     <div className="space-y-8">
                       <div className="grid gap-4 lg:grid-cols-2">
                         <SelectField
@@ -1249,29 +1308,61 @@ function Admin() {
                         >
                           Reset
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveFeesSubSection("template-list")}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          Back to template list
+                        </button>
+                      </div>
+                    </div>
+                  ) : activeFeesSubSection === "custom-list" ? (
+                    <div className="space-y-6">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_auto] lg:items-end">
+                        <SelectField
+                          label="Filter by student"
+                          value={customTemplateStudentFilter}
+                          onChange={setCustomTemplateStudentFilter}
+                          options={[
+                            { value: "", label: "All students" },
+                            ...students.map((student) => ({
+                              value: student._id,
+                              label: `${student.name}${student.admissionNumber ? ` - ${student.admissionNumber}` : ""}`,
+                            })),
+                          ]}
+                        />
+                        <div className="flex justify-start lg:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openCreateCustomTemplate()}
+                            className="inline-flex items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
+                          >
+                            Create custom template
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="space-y-3">
-                        <h3 className="text-lg font-semibold text-slate-950">Existing templates</h3>
-                        {selectedClassTemplates.length === 0 ? (
-                          <EmptyState message="Choose a class to view or manage its fee templates." />
-                        ) : (
-                          selectedClassTemplates.map((template) => (
-                            <RecordCard
-                              key={template._id}
-                              title={template.title || template.academicYear}
-                              subtitle={`${template.className || "Class"}${template.section ? ` - ${template.section}` : ""}`}
-                              meta={[
-                                `Academic year: ${template.academicYear}`,
-                                `${template.feeItems?.length || 0} fee items`,
-                                `Concession: Rs. ${template.concessionAmount || 0}`,
-                                `Late fee: Rs. ${template.lateFeeAmount || 0}`,
-                              ]}
-                              onClick={() => loadFeeTemplateIntoForm(template)}
-                            />
-                          ))
-                        )}
-                      </div>
+                      <ActionTable
+                        columns={["Student", "Class", "Academic year", "Status", "Net amount", "Pending", "Actions"]}
+                        rows={filteredFeeLedgers.map((ledger) => [
+                          ledger.childName || "Student",
+                          `${ledger.className || "-"}${ledger.section ? ` - ${ledger.section}` : ""}`,
+                          ledger.academicYear || "-",
+                          ledger.status || "unpaid",
+                          `Rs. ${ledger.netAmount || 0}`,
+                          `Rs. ${ledger.pendingAmount || 0}`,
+                          <button
+                            key={`${ledger._id}-edit`}
+                            type="button"
+                            onClick={() => openCreateCustomTemplate(ledger)}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                          >
+                            Edit
+                          </button>,
+                        ])}
+                        emptyMessage="No custom templates found for the selected filter."
+                      />
                     </div>
                   ) : (
                     <div className="space-y-8">
@@ -1345,6 +1436,13 @@ function Admin() {
                         >
                           Reset
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveFeesSubSection("custom-list")}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          Back to custom template list
+                        </button>
                       </div>
 
                       {editingFeeLedgerId && (
@@ -1381,30 +1479,6 @@ function Admin() {
                           </button>
                         </div>
                       )}
-
-                      <div className="space-y-3">
-                        <h3 className="text-lg font-semibold text-slate-950">Existing ledgers</h3>
-                        {!selectedFeeStudentId ? (
-                          <EmptyState message="Select a student to view or manage fee ledgers." />
-                        ) : selectedFeeStudentLedgers.length === 0 ? (
-                          <EmptyState message="No fee ledger exists yet for this student." />
-                        ) : (
-                          selectedFeeStudentLedgers.map((ledger) => (
-                            <RecordCard
-                              key={ledger._id}
-                              title={ledger.academicYear}
-                              subtitle={`${ledger.childName || "Student"}${ledger.className ? ` · ${ledger.className}${ledger.section ? ` - ${ledger.section}` : ""}` : ""}`}
-                              meta={[
-                                `Status: ${ledger.status || "unpaid"}`,
-                                `Total: Rs. ${ledger.netAmount || 0}`,
-                                `Paid: Rs. ${ledger.paidAmount || 0}`,
-                                `Pending: Rs. ${ledger.pendingAmount || 0}`,
-                              ]}
-                              onClick={() => loadFeeLedgerIntoForm(ledger)}
-                            />
-                          ))
-                        )}
-                      </div>
                     </div>
                   )}
                 </SectionPanel>
@@ -1571,6 +1645,8 @@ function Admin() {
 function SidebarContent({
   activeSection,
   onNavigate,
+  activeFeesSubSection,
+  onNavigateFeesSubSection,
   userName,
   onSignOut,
   mobile = false,
@@ -1578,6 +1654,8 @@ function SidebarContent({
 }: {
   activeSection: AdminSection;
   onNavigate: (section: AdminSection) => void;
+  activeFeesSubSection: FeesSubSection;
+  onNavigateFeesSubSection: (subSection: FeesSubSection) => void;
   userName: string;
   onSignOut: () => Promise<void>;
   mobile?: boolean;
@@ -1610,20 +1688,45 @@ function SidebarContent({
         <p className="px-3 text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Menu</p>
         <nav className="mt-4 space-y-2">
           {adminMenu.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onNavigate(id)}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition",
-                activeSection === id
-                  ? "bg-sky-50 text-sky-700 shadow-sm ring-1 ring-sky-100"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              {label}
-            </button>
+            <div key={id} className="space-y-2">
+              <button
+                type="button"
+                onClick={() => onNavigate(id)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition",
+                  activeSection === id
+                    ? "bg-sky-50 text-sky-700 shadow-sm ring-1 ring-sky-100"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {label}
+              </button>
+
+              {id === "fees" && activeSection === "fees" ? (
+                <div className="space-y-1 pl-6">
+                  {feesSubMenu.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        onNavigate("fees");
+                        onNavigateFeesSubSection(item.id);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm transition",
+                        activeFeesSubSection === item.id
+                          ? "bg-slate-100 font-semibold text-slate-950"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                      )}
+                    >
+                      <span className={cn("h-2.5 w-2.5 rounded-full", item.dotClassName)} />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ))}
         </nav>
       </div>
@@ -1680,8 +1783,8 @@ function SectionPanel({
 }: {
   title: string;
   description: string;
-  actionLabel: string;
-  onAction: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -1694,14 +1797,16 @@ function SectionPanel({
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           {actions}
-          <button
-            type="button"
-            onClick={onAction}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
-          >
-            <Plus className="h-4 w-4" />
-            {actionLabel}
-          </button>
+          {actionLabel && onAction ? (
+            <button
+              type="button"
+              onClick={onAction}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500"
+            >
+              <Plus className="h-4 w-4" />
+              {actionLabel}
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="mt-6">{children}</div>
@@ -1822,6 +1927,51 @@ function DataTable({
             <tr key={`${row[0]}-${index}`} className="hover:bg-slate-100/80">
               {row.map((cell, cellIndex) => (
                 <td key={`${cell}-${cellIndex}`} className="px-4 py-3">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ActionTable({
+  columns,
+  rows,
+  emptyMessage,
+}: {
+  columns: string[];
+  rows: React.ReactNode[][];
+  emptyMessage: string;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-14 text-center text-sm text-slate-500">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-full overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
+      <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
+        <thead className="bg-white text-slate-500">
+          <tr>
+            {columns.map((column) => (
+              <th key={column} className="px-4 py-3 font-medium">
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200">
+          {rows.map((row, rowIndex) => (
+            <tr key={`action-row-${rowIndex}`} className="hover:bg-slate-100/80">
+              {row.map((cell, cellIndex) => (
+                <td key={`action-cell-${rowIndex}-${cellIndex}`} className="px-4 py-3 align-middle">
                   {cell}
                 </td>
               ))}
@@ -2218,3 +2368,4 @@ function isValidDateParts(year: number, month: number, day: number) {
     date.getUTCDate() === day
   );
 }
+
