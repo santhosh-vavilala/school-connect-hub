@@ -24,6 +24,14 @@ import {
   SelectTrigger as UiSelectTrigger,
   SelectValue as UiSelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -174,6 +182,7 @@ const emptyStudentForm: StudentFormState = {
 
 const emptyTeacherForm = { name: "", phone: "" };
 const emptyClassForm = { name: "", section: "" };
+const STUDENTS_PAGE_SIZE = 10;
 const createEmptyFeeItem = (): FeeItemFormState => ({
   title: "",
   amount: "",
@@ -212,6 +221,8 @@ function Admin() {
   const [studentForm, setStudentForm] = useState<StudentFormState>(emptyStudentForm);
   const [teacherForm, setTeacherForm] = useState(emptyTeacherForm);
   const [classForm, setClassForm] = useState(emptyClassForm);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [studentPage, setStudentPage] = useState(1);
   const [activeFeesSubSection, setActiveFeesSubSection] = useState<FeesSubSection>("template-list");
   const [templateListClassFilter, setTemplateListClassFilter] = useState("");
   const [customTemplateStudentFilter, setCustomTemplateStudentFilter] = useState("");
@@ -279,6 +290,31 @@ function Admin() {
       ),
     [classes]
   );
+  const filteredStudents = useMemo(() => {
+    const query = studentSearch.trim().toLowerCase();
+
+    if (!query) {
+      return students;
+    }
+
+    return students.filter((student) => {
+      const searchableValues = [
+        student.name,
+        student.admissionNumber,
+        student.phone,
+        student.fatherName,
+        student.motherName,
+        student.classId ? classMap[student.classId] || student.classId : "",
+      ];
+
+      return searchableValues.some((value) => String(value || "").toLowerCase().includes(query));
+    });
+  }, [classMap, studentSearch, students]);
+  const studentTotalPages = Math.max(1, Math.ceil(filteredStudents.length / STUDENTS_PAGE_SIZE));
+  const paginatedStudents = useMemo(() => {
+    const startIndex = (studentPage - 1) * STUDENTS_PAGE_SIZE;
+    return filteredStudents.slice(startIndex, startIndex + STUDENTS_PAGE_SIZE);
+  }, [filteredStudents, studentPage]);
   const filteredFeeTemplates = useMemo(
     () =>
       feeTemplates.filter((template) =>
@@ -298,6 +334,16 @@ function Admin() {
     () => studentImportRows.some((row) => row.errors.length > 0),
     [studentImportRows]
   );
+
+  useEffect(() => {
+    setStudentPage(1);
+  }, [studentSearch]);
+
+  useEffect(() => {
+    if (studentPage > studentTotalPages) {
+      setStudentPage(studentTotalPages);
+    }
+  }, [studentPage, studentTotalPages]);
 
   useEffect(() => {
     if (!isAdmin || !schoolId) {
@@ -1121,18 +1167,72 @@ function Admin() {
                     </div>
                   }
                 >
-                  <DataTable
-                    columns={["Name", "Admission No.", "Phone", "Class", "Parent", "Status"]}
-                    rows={students.map((student) => [
-                      student.name || "-",
-                      student.admissionNumber || "-",
-                      student.phone || "-",
-                      student.classId ? classMap[student.classId] || student.classId : "-",
-                      student.fatherName || student.motherName || "-",
-                      student.isActive === false ? "Inactive" : "Active",
-                    ])}
-                    emptyMessage="No students found yet."
-                  />
+                  <div className="space-y-5">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                      <div className="w-full max-w-md">
+                        <TextField label="Search students" value={studentSearch} onChange={setStudentSearch} />
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                        {studentSearch.trim()
+                          ? `Showing ${paginatedStudents.length === 0 ? 0 : (studentPage - 1) * STUDENTS_PAGE_SIZE + 1}-${Math.min(studentPage * STUDENTS_PAGE_SIZE, filteredStudents.length)} of ${filteredStudents.length} matching students (${students.length} total)`
+                          : `Showing ${paginatedStudents.length === 0 ? 0 : (studentPage - 1) * STUDENTS_PAGE_SIZE + 1}-${Math.min(studentPage * STUDENTS_PAGE_SIZE, students.length)} of ${students.length} students`}
+                      </div>
+                    </div>
+
+                    <DataTable
+                      columns={["Name", "Admission No.", "Phone", "Class", "Parent", "Status"]}
+                      rows={paginatedStudents.map((student) => [
+                        student.name || "-",
+                        student.admissionNumber || "-",
+                        student.phone || "-",
+                        student.classId ? classMap[student.classId] || student.classId : "-",
+                        student.fatherName || student.motherName || "-",
+                        student.isActive === false ? "Inactive" : "Active",
+                      ])}
+                      emptyMessage={studentSearch.trim() ? "No students match your search." : "No students found yet."}
+                    />
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-slate-500">
+                        Page {studentTotalPages === 0 ? 0 : studentPage} of {studentTotalPages}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setStudentPage((current) => Math.max(1, current - 1))}
+                          disabled={studentPage === 1}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Previous
+                        </button>
+                        {Array.from({ length: studentTotalPages }, (_, index) => index + 1)
+                          .slice(Math.max(0, studentPage - 3), Math.max(5, studentPage + 2))
+                          .map((pageNumber) => (
+                            <button
+                              key={pageNumber}
+                              type="button"
+                              onClick={() => setStudentPage(pageNumber)}
+                              className={cn(
+                                "inline-flex h-10 min-w-10 items-center justify-center rounded-2xl border px-3 text-sm font-semibold transition",
+                                studentPage === pageNumber
+                                  ? "border-sky-200 bg-sky-50 text-sky-700"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-700"
+                              )}
+                            >
+                              {pageNumber}
+                            </button>
+                          ))}
+                        <button
+                          type="button"
+                          onClick={() => setStudentPage((current) => Math.min(studentTotalPages, current + 1))}
+                          disabled={studentPage === studentTotalPages}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </SectionPanel>
               )}
 
@@ -1919,28 +2019,28 @@ function DataTable({
 
   return (
     <div className="w-full max-w-full overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
-      <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
-        <thead className="bg-white text-slate-500">
-          <tr>
+      <Table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
+        <TableHeader className="bg-white text-slate-500">
+          <TableRow className="hover:bg-transparent">
             {columns.map((column) => (
-              <th key={column} className="px-4 py-3 font-medium">
+              <TableHead key={column} className="px-4 py-3 font-medium text-slate-500">
                 {column}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-200">
+          </TableRow>
+        </TableHeader>
+        <TableBody className="divide-y divide-slate-200">
           {rows.map((row, index) => (
-            <tr key={`${row[0]}-${index}`} className="hover:bg-slate-100/80">
+            <TableRow key={`${row[0]}-${index}`} className="hover:bg-slate-100/80">
               {row.map((cell, cellIndex) => (
-                <td key={`${cell}-${cellIndex}`} className="px-4 py-3">
+                <TableCell key={`${cell}-${cellIndex}`} className="px-4 py-3">
                   {cell}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -1964,28 +2064,28 @@ function ActionTable({
 
   return (
     <div className="w-full max-w-full overflow-x-auto rounded-3xl border border-slate-200 bg-slate-50">
-      <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
-        <thead className="bg-white text-slate-500">
-          <tr>
+      <Table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
+        <TableHeader className="bg-white text-slate-500">
+          <TableRow className="hover:bg-transparent">
             {columns.map((column) => (
-              <th key={column} className="px-4 py-3 font-medium">
+              <TableHead key={column} className="px-4 py-3 font-medium text-slate-500">
                 {column}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-200">
+          </TableRow>
+        </TableHeader>
+        <TableBody className="divide-y divide-slate-200">
           {rows.map((row, rowIndex) => (
-            <tr key={`action-row-${rowIndex}`} className="hover:bg-slate-100/80">
+            <TableRow key={`action-row-${rowIndex}`} className="hover:bg-slate-100/80">
               {row.map((cell, cellIndex) => (
-                <td key={`action-cell-${rowIndex}-${cellIndex}`} className="px-4 py-3 align-middle">
+                <TableCell key={`action-cell-${rowIndex}-${cellIndex}`} className="px-4 py-3 align-middle">
                   {cell}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
