@@ -224,7 +224,9 @@ function Admin() {
   const [studentForm, setStudentForm] = useState<StudentFormState>(emptyStudentForm);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [teacherForm, setTeacherForm] = useState(emptyTeacherForm);
+  const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
   const [classForm, setClassForm] = useState(emptyClassForm);
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentPage, setStudentPage] = useState(1);
   const [activeFeesSubSection, setActiveFeesSubSection] = useState<FeesSubSection>("template-list");
@@ -413,13 +415,39 @@ function Admin() {
       setError(null);
 
       try {
+        console.log("[admin] loadAdminData starting", { schoolId });
+        const summaryPromise = apiFetch(`/schools/dashboard-summary/${schoolId}`).then((result) => {
+          console.log("[admin] summary loaded", result);
+          return result;
+        });
+        const studentsPromise = apiFetch(`/students?schoolId=${schoolId}`).then((result) => {
+          console.log("[admin] students loaded", Array.isArray(result) ? result.length : result);
+          return result;
+        });
+        const teachersPromise = apiFetch(`/teachers?schoolId=${schoolId}`).then((result) => {
+          console.log("[admin] teachers loaded", Array.isArray(result) ? result.length : result);
+          return result;
+        });
+        const classesPromise = apiFetch(`/classes?schoolId=${schoolId}`).then((result) => {
+          console.log("[admin] classes loaded", Array.isArray(result) ? result.length : result);
+          return result;
+        });
+        const ledgersPromise = apiFetch(`/fees?schoolId=${schoolId}`).then((result) => {
+          console.log("[admin] fee ledgers loaded", Array.isArray(result) ? result.length : result);
+          return result;
+        });
+        const templatesPromise = apiFetch(`/fees/templates?schoolId=${schoolId}`).then((result) => {
+          console.log("[admin] fee templates loaded", Array.isArray(result) ? result.length : result);
+          return result;
+        });
+
         const [summaryResponse, studentsResponse, teachersResponse, classesResponse, ledgersResponse, templatesResponse] = await Promise.all([
-          apiFetch(`/schools/dashboard-summary/${schoolId}`),
-          apiFetch(`/students?schoolId=${schoolId}`),
-          apiFetch(`/teachers?schoolId=${schoolId}`),
-          apiFetch(`/classes?schoolId=${schoolId}`),
-          apiFetch(`/fees?schoolId=${schoolId}`),
-          apiFetch(`/fees/templates?schoolId=${schoolId}`),
+          summaryPromise,
+          studentsPromise,
+          teachersPromise,
+          classesPromise,
+          ledgersPromise,
+          templatesPromise,
         ]);
 
         setSummary({
@@ -433,9 +461,10 @@ function Admin() {
         setFeeLedgers(Array.isArray(ledgersResponse) ? (ledgersResponse as FeeLedgerRecord[]) : []);
         setFeeTemplates(Array.isArray(templatesResponse) ? (templatesResponse as FeeTemplateRecord[]) : []);
       } catch (err: any) {
-        console.error(err);
+        console.error("[admin] loadAdminData failed", err);
         setError(err?.message || "Unable to load dashboard data.");
       } finally {
+        console.log("[admin] loadAdminData finished");
         setIsLoading(false);
       }
     };
@@ -495,6 +524,8 @@ function Admin() {
     setModalType(null);
     setError(null);
     setEditingStudentId(null);
+    setEditingTeacherId(null);
+    setEditingClassId(null);
     setStudentForm(emptyStudentForm);
     setTeacherForm(emptyTeacherForm);
     setClassForm(emptyClassForm);
@@ -506,8 +537,28 @@ function Admin() {
     if (type === "student") {
       setEditingStudentId(null);
       setStudentForm(emptyStudentForm);
+      setEditingTeacherId(null);
+      setTeacherForm(emptyTeacherForm);
+    } else if (type === "teacher") {
+      setEditingTeacherId(null);
+      setTeacherForm(emptyTeacherForm);
+      setEditingStudentId(null);
+      setStudentForm(emptyStudentForm);
+      setEditingClassId(null);
+      setClassForm(emptyClassForm);
+    } else if (type === "class") {
+      setEditingClassId(null);
+      setClassForm(emptyClassForm);
+      setEditingStudentId(null);
+      setStudentForm(emptyStudentForm);
+      setEditingTeacherId(null);
+      setTeacherForm(emptyTeacherForm);
     } else {
       setStudentForm(emptyStudentForm);
+      setEditingTeacherId(null);
+      setTeacherForm(emptyTeacherForm);
+      setEditingClassId(null);
+      setClassForm(emptyClassForm);
     }
     setModalType(type);
     setMobileMenuOpen(false);
@@ -532,6 +583,31 @@ function Admin() {
       classId: student.classId || "",
     });
     setModalType("student");
+    setMobileMenuOpen(false);
+  };
+
+  const openEditTeacherModal = (teacher: TeacherRecord) => {
+    setMessage(null);
+    setError(null);
+    setEditingTeacherId(teacher._id);
+    setTeacherForm({
+      name: teacher.name || "",
+      phone: teacher.phone || "",
+      specialization: teacher.specialization || "",
+    });
+    setModalType("teacher");
+    setMobileMenuOpen(false);
+  };
+
+  const openEditClassModal = (item: ClassRecord) => {
+    setMessage(null);
+    setError(null);
+    setEditingClassId(item._id);
+    setClassForm({
+      name: item.name || "",
+      section: item.section || "",
+    });
+    setModalType("class");
     setMobileMenuOpen(false);
   };
 
@@ -581,20 +657,20 @@ function Admin() {
     setMessage(null);
 
     try {
-      await apiFetch("/teachers", {
-        method: "POST",
+      await apiFetch(editingTeacherId ? `/teachers/${editingTeacherId}` : "/teachers", {
+        method: editingTeacherId ? "PUT" : "POST",
         body: JSON.stringify({
           ...teacherForm,
           schoolId,
         }),
       });
 
-      setMessage("Teacher added successfully.");
+      setMessage(editingTeacherId ? "Teacher updated successfully." : "Teacher added successfully.");
       await reloadAdminData();
       closeModal();
       setActiveSection("teachers");
     } catch (err: any) {
-      setError(err?.message || "Unable to add teacher.");
+      setError(err?.message || (editingTeacherId ? "Unable to update teacher." : "Unable to add teacher."));
     } finally {
       setIsSaving(false);
     }
@@ -608,20 +684,20 @@ function Admin() {
     setMessage(null);
 
     try {
-      await apiFetch("/classes", {
-        method: "POST",
+      await apiFetch(editingClassId ? `/classes/${editingClassId}` : "/classes", {
+        method: editingClassId ? "PUT" : "POST",
         body: JSON.stringify({
           ...classForm,
           schoolId,
         }),
       });
 
-      setMessage("Class added successfully.");
+      setMessage(editingClassId ? "Class updated successfully." : "Class added successfully.");
       await reloadAdminData();
       closeModal();
       setActiveSection("classes");
     } catch (err: any) {
-      setError(err?.message || "Unable to add class.");
+      setError(err?.message || (editingClassId ? "Unable to update class." : "Unable to add class."));
     } finally {
       setIsSaving(false);
     }
@@ -1338,13 +1414,21 @@ function Admin() {
                   actionLabel="Add teacher"
                   onAction={() => openModal("teacher")}
                 >
-                  <DataTable
-                    columns={["Name", "Phone", "Specialization", "Status"]}
+                  <ActionTable
+                    columns={["Name", "Phone", "Specialization", "Status", "Actions"]}
                     rows={teachers.map((teacher) => [
                       teacher.name || "-",
                       teacher.phone || "-",
                       teacher.specialization || "-",
                       teacher.isActive === false ? "Inactive" : "Active",
+                      <button
+                        key={`${teacher._id}-edit`}
+                        type="button"
+                        onClick={() => openEditTeacherModal(teacher)}
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                      >
+                        Edit
+                      </button>,
                     ])}
                     emptyMessage="No teachers found yet."
                   />
@@ -1358,14 +1442,22 @@ function Admin() {
                   actionLabel="Add class"
                   onAction={() => openModal("class")}
                 >
-                  <DataTable
-                    columns={["Class ID", "Class", "Section", "Students", "Assigned teacher"]}
+                  <ActionTable
+                    columns={["Class ID", "Class", "Section", "Students", "Assigned teacher", "Actions"]}
                     rows={classes.map((item) => [
                       item._id || "-",
                       item.name || "-",
                       item.section || "-",
                       String(classStudentCountMap[item._id] || 0),
                       item.teacherId?.name || "Not assigned",
+                      <button
+                        key={`${item._id}-edit`}
+                        type="button"
+                        onClick={() => openEditClassModal(item)}
+                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                      >
+                        Edit
+                      </button>,
                     ])}
                     emptyMessage="No classes found yet."
                   />
@@ -1753,8 +1845,12 @@ function Admin() {
                 ? "Edit student"
                 : "Add new student"
               : modalType === "teacher"
-                ? "Add new teacher"
-                : "Add new class"
+                ? editingTeacherId
+                  ? "Edit teacher"
+                  : "Add new teacher"
+                : editingClassId
+                  ? "Edit class"
+                  : "Add new class"
           }
           footer={
             <ModalActions
@@ -1772,6 +1868,14 @@ function Admin() {
                   ? editingStudentId
                     ? "Update student"
                     : "Save"
+                  : modalType === "teacher"
+                    ? editingTeacherId
+                      ? "Update teacher"
+                      : "Save"
+                    : modalType === "class"
+                      ? editingClassId
+                        ? "Update class"
+                        : "Save"
                   : "Save"
               }
             />

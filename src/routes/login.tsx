@@ -39,6 +39,7 @@ function Login() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -72,14 +73,29 @@ function Login() {
   };
 
   const handleVerifyOtp = async () => {
+    if (isVerifyingOtp) {
+      console.warn("[login] verify button clicked while verification already in progress");
+      return;
+    }
+
     setError(null);
     setSuccessMessage(null);
+    setIsVerifyingOtp(true);
 
     try {
+      console.log("[login] handleVerifyOtp called", {
+        phone,
+        codeLength: code.length,
+        otpRequestedFor: auth.otpRequestedFor,
+      });
       await auth.verifyOtp(code);
+      console.log("[login] auth.verifyOtp resolved successfully, navigating to /admin");
       navigate({ to: "/admin" });
     } catch (error: any) {
+      console.error("[login] auth.verifyOtp failed", error);
       setError(error?.message || "Unable to verify OTP. Please try again.");
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -210,9 +226,10 @@ function Login() {
                     <button
                       type="button"
                       onClick={handleVerifyOtp}
+                      disabled={isVerifyingOtp}
                       className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-500"
                     >
-                      Verify OTP
+                      {isVerifyingOtp ? "Verifying..." : "Verify OTP"}
                     </button>
                   )}
                 </div>

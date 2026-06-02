@@ -11,6 +11,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 const isServer = import.meta.env.SSR || typeof window === "undefined";
 const storage = !isServer ? window.localStorage : undefined;
+const ACCESS_TOKEN_STORAGE_KEY = "school-connect-access-token";
+
+let accessTokenCache: string | null = !isServer ? window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) : null;
 
 export const supabase = isServer
   ? null
@@ -29,4 +32,22 @@ export function getSupabaseClient() {
   }
 
   return supabase;
+}
+
+export function setCachedAccessToken(token: string | null) {
+  accessTokenCache = token;
+
+  if (isServer) {
+    return;
+  }
+
+  if (token) {
+    window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+  } else {
+    window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  }
+}
+
+export function getCachedAccessToken() {
+  return accessTokenCache;
 }
