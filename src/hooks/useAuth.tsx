@@ -233,7 +233,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setUser(resolved);
-      setOtpRequestedFor("");
     },
     [otpRequestedFor]
   );

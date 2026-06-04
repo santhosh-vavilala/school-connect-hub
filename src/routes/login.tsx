@@ -40,6 +40,8 @@ function Login() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const isOtpStep = Boolean(auth.otpRequestedFor);
+  const isLocked = isVerifyingOtp;
 
   useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -180,14 +182,15 @@ function Login() {
                       value={phone}
                       onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
                       placeholder="Enter 10-digit phone number"
+                      disabled={isLocked}
                       className={cn(
-                        "w-full bg-transparent px-4 py-3.5 text-sm text-slate-950 outline-none placeholder:text-slate-400"
+                        "w-full bg-transparent px-4 py-3.5 text-sm text-slate-950 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
                       )}
                     />
                   </div>
                 </div>
 
-                {auth.otpRequestedFor && (
+                {isOtpStep && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-700">OTP code</label>
                     <p className="text-xs text-slate-500">
@@ -198,39 +201,42 @@ function Login() {
                       value={code}
                       onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                       placeholder="Enter 6-digit OTP"
+                      disabled={isLocked}
                       className={cn(
-                        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                        "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                       )}
                     />
                   </div>
                 )}
 
-                <div className={cn("grid gap-3", auth.otpRequestedFor ? "sm:grid-cols-2" : "grid-cols-1")}>
+                <div className={cn("grid gap-3", isOtpStep ? "sm:grid-cols-2" : "grid-cols-1")}>
                   <button
                     type="button"
                     onClick={handleSendOtp}
-                    className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    disabled={isLocked}
+                    className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                   >
                     Send OTP
                   </button>
 
-                  {auth.otpRequestedFor && (
+                  {isOtpStep && (
                     <button
                       type="button"
                       onClick={handleVerifyOtp}
-                      disabled={isVerifyingOtp}
-                      className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                      disabled={isLocked}
+                      className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
                     >
                       {isVerifyingOtp ? "Verifying..." : "Verify OTP"}
                     </button>
                   )}
                 </div>
 
-                {auth.otpRequestedFor && (
+                {isOtpStep && (
                   <button
                     type="button"
                     onClick={resetOtpFlow}
-                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                    disabled={isLocked}
+                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Request New OTP
                   </button>
