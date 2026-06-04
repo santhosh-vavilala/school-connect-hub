@@ -703,6 +703,112 @@ function Admin() {
     }
   };
 
+  const handleToggleStudentStatus = async (student: StudentRecord) => {
+    const nextIsActive = student.isActive === false;
+    const confirmed = window.confirm(
+      `${nextIsActive ? "Enable" : "Disable"} student ${student.name || "this student"}?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await apiFetch("/students/toggle", {
+        method: "POST",
+        body: JSON.stringify({
+          admissionNumber: student.admissionNumber,
+          isActive: nextIsActive,
+        }),
+      });
+
+      setMessage(`Student ${nextIsActive ? "enabled" : "disabled"} successfully.`);
+      await reloadAdminData();
+      setActiveSection("students");
+    } catch (err: any) {
+      setError(err?.message || `Unable to ${nextIsActive ? "enable" : "disable"} student.`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteTeacher = async (teacher: TeacherRecord) => {
+    const assignedClass = classes.find((item) => item.teacherId?._id === teacher._id);
+    if (assignedClass) {
+      setMessage(null);
+      setError(
+        `Cannot delete teacher while assigned to class ${assignedClass.name}${assignedClass.section ? ` - ${assignedClass.section}` : ""}.`
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete teacher ${teacher.name || "this teacher"}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await apiFetch(`/teachers/${teacher._id}`, {
+        method: "DELETE",
+      });
+
+      setMessage("Teacher deleted successfully.");
+      await reloadAdminData();
+      setActiveSection("teachers");
+    } catch (err: any) {
+      setError(err?.message || "Unable to delete teacher.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteClass = async (item: ClassRecord) => {
+    const assignedStudentsCount = classStudentCountMap[item._id] || 0;
+    if (assignedStudentsCount > 0) {
+      setMessage(null);
+      setError("Cannot delete class while students are assigned to it.");
+      return;
+    }
+
+    if (item.teacherId?._id) {
+      setMessage(null);
+      setError("Cannot delete class while a teacher is assigned to it.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete class ${item.name || "this class"}${item.section ? ` - ${item.section}` : ""}?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await apiFetch(`/classes/${item._id}`, {
+        method: "DELETE",
+      });
+
+      setMessage("Class deleted successfully.");
+      await reloadAdminData();
+      setActiveSection("classes");
+    } catch (err: any) {
+      setError(err?.message || "Unable to delete class.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDownloadStudentSampleCsv = () => {
     const csv = createStudentSampleCsv();
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1351,14 +1457,30 @@ function Admin() {
                         student.classId ? classMap[student.classId] || student.classId : "-",
                         student.fatherName || student.motherName || "-",
                         student.isActive === false ? "Inactive" : "Active",
-                        <button
-                          key={`${student._id}-edit`}
-                          type="button"
-                          onClick={() => openEditStudentModal(student)}
-                          className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
-                        >
-                          Edit
-                        </button>,
+                        <div key={`${student._id}-actions`} className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditStudentModal(student)}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleToggleStudentStatus(student);
+                            }}
+                            disabled={isSaving}
+                            className={cn(
+                              "inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+                              student.isActive === false
+                                ? "border border-emerald-200 text-emerald-600 hover:border-emerald-300 hover:text-emerald-700"
+                                : "border border-amber-200 text-amber-700 hover:border-amber-300 hover:text-amber-800"
+                            )}
+                          >
+                            {student.isActive === false ? "Enable" : "Disable"}
+                          </button>
+                        </div>,
                       ])}
                       emptyMessage={studentSearch.trim() ? "No students match your search." : "No students found yet."}
                     />
@@ -1414,24 +1536,35 @@ function Admin() {
                   actionLabel="Add teacher"
                   onAction={() => openModal("teacher")}
                 >
-                  <ActionTable
-                    columns={["Name", "Phone", "Specialization", "Status", "Actions"]}
-                    rows={teachers.map((teacher) => [
-                      teacher.name || "-",
-                      teacher.phone || "-",
-                      teacher.specialization || "-",
-                      teacher.isActive === false ? "Inactive" : "Active",
-                      <button
-                        key={`${teacher._id}-edit`}
-                        type="button"
-                        onClick={() => openEditTeacherModal(teacher)}
-                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
-                      >
-                        Edit
-                      </button>,
-                    ])}
-                    emptyMessage="No teachers found yet."
-                  />
+                    <ActionTable
+                      columns={["Name", "Phone", "Specialization", "Status", "Actions"]}
+                      rows={teachers.map((teacher) => [
+                        teacher.name || "-",
+                        teacher.phone || "-",
+                        teacher.specialization || "-",
+                        teacher.isActive === false ? "Inactive" : "Active",
+                        <div key={`${teacher._id}-actions`} className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditTeacherModal(teacher)}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleDeleteTeacher(teacher);
+                            }}
+                            disabled={isSaving}
+                            className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>,
+                      ])}
+                      emptyMessage="No teachers found yet."
+                    />
                 </SectionPanel>
               )}
 
@@ -1442,25 +1575,36 @@ function Admin() {
                   actionLabel="Add class"
                   onAction={() => openModal("class")}
                 >
-                  <ActionTable
-                    columns={["Class ID", "Class", "Section", "Students", "Assigned teacher", "Actions"]}
-                    rows={classes.map((item) => [
-                      item._id || "-",
-                      item.name || "-",
-                      item.section || "-",
-                      String(classStudentCountMap[item._id] || 0),
-                      item.teacherId?.name || "Not assigned",
-                      <button
-                        key={`${item._id}-edit`}
-                        type="button"
-                        onClick={() => openEditClassModal(item)}
-                        className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
-                      >
-                        Edit
-                      </button>,
-                    ])}
-                    emptyMessage="No classes found yet."
-                  />
+                    <ActionTable
+                      columns={["Class ID", "Class", "Section", "Students", "Assigned teacher", "Actions"]}
+                      rows={classes.map((item) => [
+                        item._id || "-",
+                        item.name || "-",
+                        item.section || "-",
+                        String(classStudentCountMap[item._id] || 0),
+                        item.teacherId?.name || "Not assigned",
+                        <div key={`${item._id}-actions`} className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditClassModal(item)}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleDeleteClass(item);
+                            }}
+                            disabled={isSaving}
+                            className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>,
+                      ])}
+                      emptyMessage="No classes found yet."
+                    />
                 </SectionPanel>
               )}
 
