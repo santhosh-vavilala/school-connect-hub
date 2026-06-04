@@ -32,6 +32,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -157,6 +167,14 @@ interface FeeTemplateRecord {
   notes?: string;
 }
 
+interface PendingConfirmation {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  confirmClassName: string;
+  onConfirm: () => Promise<void>;
+}
+
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
@@ -261,6 +279,7 @@ function Admin() {
     tone: "success" | "error";
     message: string;
   } | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const studentCsvInputRef = useRef<HTMLInputElement | null>(null);
@@ -703,15 +722,15 @@ function Admin() {
     }
   };
 
-  const handleToggleStudentStatus = async (student: StudentRecord) => {
-    const nextIsActive = student.isActive === false;
-    const confirmed = window.confirm(
-      `${nextIsActive ? "Enable" : "Disable"} student ${student.name || "this student"}?`
-    );
-    if (!confirmed) {
+  const closeConfirmationModal = () => {
+    if (isSaving) {
       return;
     }
+    setPendingConfirmation(null);
+  };
 
+  const handleToggleStudentStatus = async (student: StudentRecord) => {
+    const nextIsActive = student.isActive === false;
     setIsSaving(true);
     setError(null);
     setMessage(null);
@@ -742,11 +761,6 @@ function Admin() {
       setError(
         `Cannot delete teacher while assigned to class ${assignedClass.name}${assignedClass.section ? ` - ${assignedClass.section}` : ""}.`
       );
-      return;
-    }
-
-    const confirmed = window.confirm(`Delete teacher ${teacher.name || "this teacher"}?`);
-    if (!confirmed) {
       return;
     }
 
@@ -783,13 +797,6 @@ function Admin() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Delete class ${item.name || "this class"}${item.section ? ` - ${item.section}` : ""}?`
-    );
-    if (!confirmed) {
-      return;
-    }
-
     setIsSaving(true);
     setError(null);
     setMessage(null);
@@ -807,6 +814,47 @@ function Admin() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const openStudentStatusConfirmation = (student: StudentRecord) => {
+    const nextIsActive = student.isActive === false;
+    setPendingConfirmation({
+      title: `${nextIsActive ? "Enable" : "Disable"} student`,
+      description: `${nextIsActive ? "Enable" : "Disable"} ${student.name || "this student"}? Their record will remain in the system.`,
+      confirmLabel: nextIsActive ? "Enable student" : "Disable student",
+      confirmClassName: nextIsActive ? "bg-emerald-600 hover:bg-emerald-500" : "bg-amber-600 hover:bg-amber-500",
+      onConfirm: async () => {
+        setPendingConfirmation(null);
+        await handleToggleStudentStatus(student);
+      },
+    });
+  };
+
+  const openTeacherDeleteConfirmation = (teacher: TeacherRecord) => {
+    setPendingConfirmation({
+      title: "Delete teacher",
+      description: `Delete ${teacher.name || "this teacher"}? This action cannot be undone.`,
+      confirmLabel: "Delete teacher",
+      confirmClassName: "bg-red-600 hover:bg-red-500",
+      onConfirm: async () => {
+        setPendingConfirmation(null);
+        await handleDeleteTeacher(teacher);
+      },
+    });
+  };
+
+  const openClassDeleteConfirmation = (item: ClassRecord) => {
+    const classLabel = `${item.name || "this class"}${item.section ? ` - ${item.section}` : ""}`;
+    setPendingConfirmation({
+      title: "Delete class",
+      description: `Delete ${classLabel}? This action cannot be undone.`,
+      confirmLabel: "Delete class",
+      confirmClassName: "bg-red-600 hover:bg-red-500",
+      onConfirm: async () => {
+        setPendingConfirmation(null);
+        await handleDeleteClass(item);
+      },
+    });
   };
 
   const handleDownloadStudentSampleCsv = () => {
@@ -1468,7 +1516,7 @@ function Admin() {
                           <button
                             type="button"
                             onClick={() => {
-                              void handleToggleStudentStatus(student);
+                              openStudentStatusConfirmation(student);
                             }}
                             disabled={isSaving}
                             className={cn(
@@ -1554,7 +1602,7 @@ function Admin() {
                           <button
                             type="button"
                             onClick={() => {
-                              void handleDeleteTeacher(teacher);
+                              openTeacherDeleteConfirmation(teacher);
                             }}
                             disabled={isSaving}
                             className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1594,7 +1642,7 @@ function Admin() {
                           <button
                             type="button"
                             onClick={() => {
-                              void handleDeleteClass(item);
+                              openClassDeleteConfirmation(item);
                             }}
                             disabled={isSaving}
                             className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2157,6 +2205,41 @@ function Admin() {
           </div>
         </ModalShell>
       )}
+
+      <AlertDialog
+        open={Boolean(pendingConfirmation)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeConfirmationModal();
+          }
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl border border-slate-200 bg-white p-0 shadow-2xl">
+          <AlertDialogHeader className="px-6 pb-2 pt-6 text-left">
+            <AlertDialogTitle className="text-xl font-semibold text-slate-950">
+              {pendingConfirmation?.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="mt-2 text-sm leading-6 text-slate-500">
+              {pendingConfirmation?.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="border-t border-slate-200 px-6 py-4">
+            <AlertDialogCancel disabled={isSaving} className="rounded-2xl">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSaving}
+              onClick={(event) => {
+                event.preventDefault();
+                void pendingConfirmation?.onConfirm();
+              }}
+              className={cn("rounded-2xl text-white", pendingConfirmation?.confirmClassName)}
+            >
+              {isSaving ? "Please wait..." : pendingConfirmation?.confirmLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }
