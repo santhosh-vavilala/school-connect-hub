@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { GraduationCap, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -13,24 +13,6 @@ export const Route = createFileRoute("/login")({
   }),
   component: Login,
 });
-
-const highlights = [
-  {
-    icon: Users,
-    title: "Manage large student data",
-    description: "Add and organize students, teachers, and classes faster when your school handles 500+ records.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Use the same mobile login",
-    description: "Admins sign in with the same OTP-based account already used inside the School Connect mobile app.",
-  },
-  {
-    icon: Sparkles,
-    title: "See the school clearly",
-    description: "Keep operations simple with a central web dashboard built for admin work and super admin oversight.",
-  },
-];
 
 function Login() {
   const auth = useAuth();
@@ -124,23 +106,6 @@ function Login() {
                   Manage students, classes, teachers, and school operations from one focused web workspace built for high-volume admin tasks.
                 </p>
               </div>
-            </div>
-
-            <div className="relative z-10 grid gap-4">
-              {highlights.map(({ icon: Icon, title, description }) => (
-                <div
-                  key={title}
-                  className="flex items-start gap-4 rounded-2xl border border-white/14 bg-white/8 px-4 py-4 backdrop-blur-md"
-                >
-                  <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/14">
-                    <Icon className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{title}</p>
-                    <p className="mt-1 text-sm leading-6 text-white/70">{description}</p>
-                  </div>
-                </div>
-              ))}
             </div>
           </section>
 
