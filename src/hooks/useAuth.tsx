@@ -1,6 +1,6 @@
 import * as React from "react";
-import { getSupabaseClient, setCachedAccessToken } from "@/lib/supabase";
-import { publicApiFetch } from "@/lib/api";
+import { clearHubSession, establishHubSession, getHubSessionUser } from "@/lib/hubAuth";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export type AuthRole =
   | "super_admin"
@@ -31,30 +31,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = React.createContext<AuthContextValue | undefined>(undefined);
-
-function normalizePhone(phone?: string | null) {
-  if (!phone) return null;
-  return phone.replace("+91", "").replace(/\D/g, "");
-}
-
-async function resolveUser(phone: string): Promise<AuthUser | null> {
-  const normalizedPhone = normalizePhone(phone);
-  if (!normalizedPhone) {
-    return null;
-  }
-
-  const payload = (await publicApiFetch(`/auth/user?phone=${normalizedPhone}`)) as any;
-
-  return {
-    role: payload.role,
-    schoolId: payload.schoolId || null,
-    userId: payload.userId || null,
-    name: payload.name || null,
-    phone: normalizedPhone,
-    isActive: payload.isActive !== false,
-    schoolEnabled: payload.schoolEnabled !== false,
-  };
-}
 
 function getAuthErrorMessage(error: unknown, flow: "sendOtp" | "verifyOtp") {
   const message = error instanceof Error ? error.message : String(error || "");
@@ -112,17 +88,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const loadSessionUser = async () => {
       try {
+        const cookieUser = await getHubSessionUser();
+        if (mounted && cookieUser) {
+          setUser(cookieUser);
+          return;
+        }
+
         const { data } = await supabase.auth.getSession();
-        setCachedAccessToken(data.session?.access_token || null);
-        const phone = data.session?.user?.phone;
-        if (phone) {
-          const resolved = await resolveUser(phone);
+        const accessToken = data.session?.access_token;
+        if (accessToken) {
+          const resolved = await establishHubSession({
+            data: { accessToken },
+          });
           if (mounted) {
             setUser(resolved);
           }
         }
       } catch (error) {
         console.error("Auth initialization failed", error);
+        if (mounted) {
+          setUser(null);
+        }
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -136,23 +122,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return;
-      setCachedAccessToken(session?.access_token || null);
       if (!session?.user?.phone) {
         setUser(null);
         setOtpRequestedFor("");
         return;
       }
-      window.setTimeout(async () => {
-        if (!mounted) return;
-        try {
-          const resolved = await resolveUser(session.user.phone || "");
-          if (mounted) {
-            setUser(resolved);
-          }
-        } catch (error) {
-          console.error(error);
-        }
-      }, 0);
     });
 
     return () => {
@@ -162,16 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshUser = React.useCallback(async () => {
-    const supabase = getSupabaseClient();
-    const { data } = await supabase.auth.getSession();
-    setCachedAccessToken(data.session?.access_token || null);
-    const phone = data.session?.user?.phone;
-    if (phone) {
-      const resolved = await resolveUser(phone);
-      setUser(resolved);
-    } else {
-      setUser(null);
-    }
+    const resolved = await getHubSessionUser();
+    setUser(resolved);
   }, []);
 
   const sendOtp = React.useCallback(async (phone: string) => {
@@ -207,29 +173,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token: trimmedCode,
         type: "sms",
       });
-      setCachedAccessToken(data.session?.access_token || null);
 
       if (error) {
         throw new Error(getAuthErrorMessage(error, "verifyOtp"));
       }
 
-      const phone = data.user?.phone || otpRequestedFor;
-      const resolved = await resolveUser(phone);
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        await supabase.auth.signOut();
+        throw new Error("Unable to create a dashboard session. Please try again.");
+      }
+
+      let resolved: AuthUser | null;
+      try {
+        resolved = await establishHubSession({
+          data: { accessToken },
+        });
+      } catch (error) {
+        await supabase.auth.signOut();
+        throw error;
+      }
+
       if (!resolved) {
         await supabase.auth.signOut();
-        throw new Error("User not found. This phone number is not registered in School Connect.");
-      }
-      if (!resolved.isActive) {
-        await supabase.auth.signOut();
-        throw new Error("Your account has been disabled. Please contact the school.");
-      }
-      if (!resolved.schoolEnabled) {
-        await supabase.auth.signOut();
-        throw new Error("Unable to login because the school account is inactive.");
-      }
-      if (!["admin", "super_admin"].includes(resolved.role || "")) {
-        await supabase.auth.signOut();
-        throw new Error("Only admin and super admin users can access the School Connect dashboard.");
+        throw new Error("Unable to load the dashboard user.");
       }
 
       setUser(resolved);
@@ -239,8 +206,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = React.useCallback(async () => {
     const supabase = getSupabaseClient();
+    await clearHubSession();
     await supabase.auth.signOut();
-    setCachedAccessToken(null);
     setUser(null);
     setOtpRequestedFor("");
   }, []);
