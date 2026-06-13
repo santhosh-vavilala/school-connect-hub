@@ -174,15 +174,17 @@ function Login() {
                   </div>
                 )}
 
-                <div className={cn("grid gap-3", isOtpStep ? "sm:grid-cols-2" : "grid-cols-1")}>
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    disabled={isLocked}
-                    className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                  >
-                    Send OTP
-                  </button>
+                <div className="grid gap-3">
+                  {!isOtpStep && (
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={isLocked}
+                      className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                      Send OTP
+                    </button>
+                  )}
 
                   {isOtpStep && (
                     <button
