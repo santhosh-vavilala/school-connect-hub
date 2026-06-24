@@ -270,6 +270,7 @@ function Admin() {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isImportingStudents, setIsImportingStudents] = useState(false);
@@ -918,6 +919,7 @@ function Admin() {
     setFeeConcessionAmount("");
     setFeeLateAmount("");
     setFeeNotes("");
+    setEditingPaymentId(null);
     setPaymentAmount("");
     setPaymentMode("cash");
     setPaymentDate(new Date().toISOString().split("T")[0]);
@@ -1162,31 +1164,95 @@ function Admin() {
       return;
     }
 
+    if (!paymentAmount || Number(paymentAmount) <= 0) {
+      setError("Payment amount must be greater than zero.");
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
     setMessage(null);
 
     try {
-      await apiFetch(`/fees/${editingFeeLedgerId}/payments`, {
-        method: "POST",
-        body: JSON.stringify({
-          amount: Number(paymentAmount) || 0,
-          paymentMode,
-          paymentDate,
-          referenceNumber: paymentReference.trim(),
-          notes: paymentNotes.trim(),
-        }),
-      });
-      setMessage("Payment recorded.");
+      const payload = {
+        amount: Number(paymentAmount) || 0,
+        paymentMode,
+        paymentDate,
+        referenceNumber: paymentReference.trim(),
+        notes: paymentNotes.trim(),
+      };
+
+      if (editingPaymentId) {
+        // Update existing payment
+        await apiFetch(`/fees/${editingFeeLedgerId}/payments/${editingPaymentId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        setMessage("Payment updated successfully.");
+      } else {
+        // Create new payment
+        await apiFetch(`/fees/${editingFeeLedgerId}/payments`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setMessage("Payment recorded successfully.");
+      }
+
       setPaymentAmount("");
       setPaymentReference("");
       setPaymentNotes("");
+      setEditingPaymentId(null);
       await reloadAdminData();
     } catch (err: any) {
       setError(err?.message || "Unable to record payment.");
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const deletePayment = async (paymentId: string) => {
+    if (!editingFeeLedgerId) {
+      setError("Fee ledger not selected.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await apiFetch(`/fees/${editingFeeLedgerId}/payments/${paymentId}`, {
+        method: "DELETE",
+      });
+      setMessage("Payment deleted successfully.");
+      setPaymentAmount("");
+      setPaymentReference("");
+      setPaymentNotes("");
+      setEditingPaymentId(null);
+      await reloadAdminData();
+    } catch (err: any) {
+      setError(err?.message || "Unable to delete payment.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const loadPaymentIntoForm = (payment: any) => {
+    setEditingPaymentId(payment._id);
+    setPaymentAmount(String(payment.amount || ""));
+    setPaymentMode(payment.paymentMode || "cash");
+    setPaymentDate(payment.paymentDate ? String(payment.paymentDate).split("T")[0] : new Date().toISOString().split("T")[0]);
+    setPaymentReference(payment.referenceNumber || "");
+    setPaymentNotes(payment.notes || "");
+  };
+
+  const resetPaymentForm = () => {
+    setEditingPaymentId(null);
+    setPaymentAmount("");
+    setPaymentMode("cash");
+    setPaymentDate(new Date().toISOString().split("T")[0]);
+    setPaymentReference("");
+    setPaymentNotes("");
   };
 
   const handleSignOut = async () => {
@@ -1584,35 +1650,35 @@ function Admin() {
                   actionLabel="Add teacher"
                   onAction={() => openModal("teacher")}
                 >
-                    <ActionTable
-                      columns={["Name", "Phone", "Specialization", "Status", "Actions"]}
-                      rows={teachers.map((teacher) => [
-                        teacher.name || "-",
-                        teacher.phone || "-",
-                        teacher.specialization || "-",
-                        teacher.isActive === false ? "Inactive" : "Active",
-                        <div key={`${teacher._id}-actions`} className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditTeacherModal(teacher)}
-                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              openTeacherDeleteConfirmation(teacher);
-                            }}
-                            disabled={isSaving}
-                            className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Delete
-                          </button>
-                        </div>,
-                      ])}
-                      emptyMessage="No teachers found yet."
-                    />
+                  <ActionTable
+                    columns={["Name", "Phone", "Specialization", "Status", "Actions"]}
+                    rows={teachers.map((teacher) => [
+                      teacher.name || "-",
+                      teacher.phone || "-",
+                      teacher.specialization || "-",
+                      teacher.isActive === false ? "Inactive" : "Active",
+                      <div key={`${teacher._id}-actions`} className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditTeacherModal(teacher)}
+                          className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            openTeacherDeleteConfirmation(teacher);
+                          }}
+                          disabled={isSaving}
+                          className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>,
+                    ])}
+                    emptyMessage="No teachers found yet."
+                  />
                 </SectionPanel>
               )}
 
@@ -1623,36 +1689,36 @@ function Admin() {
                   actionLabel="Add class"
                   onAction={() => openModal("class")}
                 >
-                    <ActionTable
-                      columns={["Class ID", "Class", "Section", "Students", "Assigned teacher", "Actions"]}
-                      rows={classes.map((item) => [
-                        item._id || "-",
-                        item.name || "-",
-                        item.section || "-",
-                        String(classStudentCountMap[item._id] || 0),
-                        item.teacherId?.name || "Not assigned",
-                        <div key={`${item._id}-actions`} className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditClassModal(item)}
-                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              openClassDeleteConfirmation(item);
-                            }}
-                            disabled={isSaving}
-                            className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Delete
-                          </button>
-                        </div>,
-                      ])}
-                      emptyMessage="No classes found yet."
-                    />
+                  <ActionTable
+                    columns={["Class ID", "Class", "Section", "Students", "Assigned teacher", "Actions"]}
+                    rows={classes.map((item) => [
+                      item._id || "-",
+                      item.name || "-",
+                      item.section || "-",
+                      String(classStudentCountMap[item._id] || 0),
+                      item.teacherId?.name || "Not assigned",
+                      <div key={`${item._id}-actions`} className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditClassModal(item)}
+                          className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            openClassDeleteConfirmation(item);
+                          }}
+                          disabled={isSaving}
+                          className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>,
+                    ])}
+                    emptyMessage="No classes found yet."
+                  />
                 </SectionPanel>
               )}
 
@@ -1987,37 +2053,123 @@ function Admin() {
                       </div>
 
                       {editingFeeLedgerId && (
-                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                          <h3 className="text-lg font-semibold text-slate-950">Record offline payment</h3>
-                          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                            <TextField label="Payment amount" value={paymentAmount} onChange={setPaymentAmount} />
-                            <SelectField
-                              label="Payment mode"
-                              value={paymentMode}
-                              onChange={setPaymentMode}
-                              options={[
-                                { value: "cash", label: "Cash" },
-                                { value: "upi", label: "UPI" },
-                                { value: "bank_transfer", label: "Bank transfer" },
-                                { value: "cheque", label: "Cheque" },
-                              ]}
-                            />
-                            <TextField label="Payment date" type="date" value={paymentDate} onChange={setPaymentDate} />
-                            <TextField label="Reference number" value={paymentReference} onChange={setPaymentReference} />
+                        <div className="space-y-6">
+                          {/* Payment History Table */}
+                          {feeLedgers.find(l => l._id === editingFeeLedgerId)?.payments &&
+                            feeLedgers.find(l => l._id === editingFeeLedgerId)!.payments!.length > 0 && (
+                              <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                                <h3 className="text-lg font-semibold text-slate-950 mb-4">Payment history</h3>
+                                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50">
+                                  <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
+                                    <thead className="bg-white text-slate-500">
+                                      <tr>
+                                        <th className="px-4 py-3">Date</th>
+                                        <th className="px-4 py-3">Amount</th>
+                                        <th className="px-4 py-3">Mode</th>
+                                        <th className="px-4 py-3">Reference</th>
+                                        <th className="px-4 py-3">Receipt</th>
+                                        <th className="px-4 py-3">Notes</th>
+                                        <th className="px-4 py-3">Actions</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200">
+                                      {feeLedgers.find(l => l._id === editingFeeLedgerId)!.payments!.map((payment) => (
+                                        <tr key={payment._id} className="hover:bg-slate-100/80">
+                                          <td className="px-4 py-3">{payment.paymentDate ? String(payment.paymentDate).split("T")[0] : "-"}</td>
+                                          <td className="px-4 py-3 font-medium">Rs. {payment.amount}</td>
+                                          <td className="px-4 py-3 capitalize">{payment.paymentMode || "-"}</td>
+                                          <td className="px-4 py-3">{payment.referenceNumber || "-"}</td>
+                                          <td className="px-4 py-3 text-xs text-slate-500">{payment.receiptNumber || "-"}</td>
+                                          <td className="px-4 py-3 max-w-xs truncate text-xs text-slate-600">{payment.notes || "-"}</td>
+                                          <td className="px-4 py-3">
+                                            <div className="flex flex-wrap gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => loadPaymentIntoForm(payment)}
+                                                className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700"
+                                              >
+                                                Edit
+                                              </button>
+                                              {payment._id && (() => {
+                                                const paymentId = payment._id;
+                                                return (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setPendingConfirmation({
+                                                        title: "Delete payment",
+                                                        description: `Delete this payment of Rs. ${payment.amount}? This action cannot be undone.`,
+                                                        confirmLabel: "Delete payment",
+                                                        confirmClassName: "bg-red-600 hover:bg-red-500",
+                                                        onConfirm: async () => {
+                                                          setPendingConfirmation(null);
+                                                          await deletePayment(paymentId);
+                                                        },
+                                                      });
+                                                    }}
+                                                    disabled={isSaving}
+                                                    className="inline-flex items-center justify-center rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                                  >
+                                                    Delete
+                                                  </button>
+                                                );
+                                              })()}
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                          {/* Payment Recording/Editing Form */}
+                          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                            <h3 className="text-lg font-semibold text-slate-950">
+                              {editingPaymentId ? "Edit payment" : "Record offline payment"}
+                            </h3>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                              <TextField label="Payment amount" value={paymentAmount} onChange={setPaymentAmount} />
+                              <SelectField
+                                label="Payment mode"
+                                value={paymentMode}
+                                onChange={setPaymentMode}
+                                options={[
+                                  { value: "cash", label: "Cash" },
+                                  { value: "upi", label: "UPI" },
+                                  { value: "bank_transfer", label: "Bank transfer" },
+                                  { value: "cheque", label: "Cheque" },
+                                ]}
+                              />
+                              <TextField label="Payment date" type="date" value={paymentDate} onChange={setPaymentDate} />
+                              <TextField label="Reference number" value={paymentReference} onChange={setPaymentReference} />
+                            </div>
+                            <div className="mt-4">
+                              <TextAreaField label="Payment notes" value={paymentNotes} onChange={setPaymentNotes} />
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void recordFeePayment();
+                                }}
+                                disabled={isSaving}
+                                className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                              >
+                                {editingPaymentId ? "Update payment" : "Record payment"}
+                              </button>
+                              {editingPaymentId && (
+                                <button
+                                  type="button"
+                                  onClick={resetPaymentForm}
+                                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-4">
-                            <TextAreaField label="Payment notes" value={paymentNotes} onChange={setPaymentNotes} />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void recordFeePayment();
-                            }}
-                            disabled={isSaving}
-                            className="mt-4 inline-flex items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
-                          >
-                            Record payment
-                          </button>
                         </div>
                       )}
                     </div>
@@ -2068,7 +2220,7 @@ function Admin() {
                       ? editingClassId
                         ? "Update class"
                         : "Save"
-                  : "Save"
+                      : "Save"
               }
             />
           }

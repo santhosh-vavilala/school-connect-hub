@@ -31,6 +31,7 @@ function parseBody(body: RequestInit["body"]) {
     } catch {
       return body;
     }
+    // payments endpoints proxied below in proxyTable
   }
   return body;
 }
@@ -119,7 +120,8 @@ function assertAllowedEndpoint(user: AuthUser, url: URL, method: ProxyMethod) {
     { pattern: /^\/fees\/templates\/[^/]+$/, methods: ["PUT"] },
     { pattern: /^\/fees\/templates\/[^/]+\/assign$/, methods: ["POST"] },
     { pattern: /^\/fees\/[^/]+$/, methods: ["PUT"] },
-    { pattern: /^\/fees\/[^/]+\/payments$/, methods: ["POST"] },
+    { pattern: /^\/fees\/[^/]+\/payments$/, methods: ["GET", "POST"] },
+    { pattern: /^\/fees\/[^/]+\/payments\/[^/]+$/, methods: ["PUT", "DELETE"] },
   ];
 
   const allowed = adminPatterns.some(
